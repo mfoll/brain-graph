@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b",
-    "graph:dump": "node server/dump.ts"
+    "graph:dump": "node server/dump.ts",
+    "graph:homes": "node server/homes.ts"
   },
   "dependencies": {
     "chokidar": "^6.0.0",

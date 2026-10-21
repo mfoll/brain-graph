@@ -1,7 +1,7 @@
 import type Sigma from "sigma";
 import type { VaultGraph } from "../types";
 import type { BrainGraph } from "./build";
-import { homeChain, type HomeIndex, type HomeLevel } from "./home";
+import { anchorAt, homeChain, type HomeIndex, type HomeLevel } from "./home";
 
 export interface HullOptions {
   index: HomeIndex;
@@ -14,13 +14,6 @@ export interface HullOptions {
 }
 
 type Pt = { x: number; y: number };
-
-/** Hub that a note's cluster is labelled by at this roll-up level. */
-export function anchorAt(index: HomeIndex, hubId: string, level: HomeLevel): string {
-  let cur = index.hubs.get(hubId);
-  while (cur && cur.depth > level && cur.parent) cur = index.hubs.get(cur.parent);
-  return cur?.id ?? hubId;
-}
 
 function median(values: number[]): number {
   const v = values.slice().sort((a, b) => a - b);
@@ -68,7 +61,7 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     if (opts.hidden.has(id)) return;
     const note = opts.index.byId.get(id);
     if (!note) return;
-    const chain = homeChain(note, opts.index.hubs);
+    const chain = homeChain(note, opts.index);
     if (!chain.length) return;
     const anchor = anchorAt(opts.index, chain[0], opts.level);
     const p = sigma.graphToViewport({ x: a.x, y: a.y });

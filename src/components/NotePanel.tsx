@@ -20,7 +20,8 @@ export function deepLink(data: VaultGraph, id: string): string {
 }
 
 export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose }: Props) {
-  const chain = homeChain(node, homeIndex.hubs).filter((id) => id !== node.id).reverse(); // root first
+  const chain = homeChain(node, homeIndex).filter((id) => id !== node.id).reverse(); // root first
+  const noteHome = homeIndex.homes.get(node.id);
   const [tab, setTab] = useState<"note" | "links">("note");
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const out = new Map<string, string[]>();
@@ -82,7 +83,8 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
               </button>
             </span>
           ))}
-          {node.homeAlternatives.length > 0 && <span className="muted small"> (+{node.homeAlternatives.length} other home)</span>}
+          {noteHome && noteHome.alternatives.length > 0 && <span className="muted small"> (+{noteHome.alternatives.length} other parent)</span>}
+          {noteHome?.viaHas && <span className="muted small"> (via has)</span>}
         </div>
       )}
       <div className="actions">

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
+import { sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
@@ -122,6 +123,8 @@ export function GraphView(props: GraphViewProps) {
 
     const sigma = new Sigma<NodeAttrs, EdgeAttrs, Record<string, unknown>, NS, {}, GS>(graph, container, {
       customGraphState: { focusActive: false, labelsAlways: propsRef.current.showLabels },
+      // Sigma only registers the circle by default; declare the shapes used for note types.
+      primitives: { nodes: { shapes: [sdfCircle(), sdfSquare(), sdfDiamond(), sdfTriangle()] } },
       customNodeState: { isSelected: false },
       settings: {
         allowInvalidContainer: true, // the pane may be hidden (0x0) on first mount; we resize below
@@ -347,7 +350,7 @@ export function GraphView(props: GraphViewProps) {
     graph.forEachEdge((e, _a, s, t) => (hidden.has(s) || hidden.has(t) ? eHid : eShown).push(e));
     sigma.setEdgesState(eShown, { isHidden: false });
     sigma.setEdgesState(eHid, { isHidden: true });
-    (sigma as unknown as Helpers).__fit();
+    // Deliberately no camera refit here: filtering or isolating should not move the view.
   }, [props.hidden, props.graph]);
 
   // Keep the selected node's neighbourhood highlighted.

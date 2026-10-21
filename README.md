@@ -6,7 +6,7 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 
 ## What it shows
 
-- One node per Markdown note, sized by number of links. **Colour by home** (default): every note rolls up through `belongs_to` (and inverse `has`) to its nearest Project, or failing that its Responsibility or Topic; a slider chooses the roll-up level (area, project, subproject), and node shape then encodes the type (◆ project, ■ responsibility/topic, ▲ question). **Colour by type** uses the vault's own `Type` note colours so the legend matches Tolaria's sidebar.
+- One node per Markdown note, sized by number of links. **Colour by home** (default): every note rolls up through its `belongs_to` chain to the nearest *group* note. Which types act as groups is configurable (default Project, Responsibility, Topic; when Project is among them the first Project met wins). Inverse `has` links are used only as a fallback when `belongs_to` reaches no group, because this vault uses `has` for selective entry points. A slider chooses the roll-up level (area, project, subproject), and node shape encodes the type (◆ project, ■ responsibility/topic, ▲ question). **Colour by type** uses the vault's own `Type` note colours so the legend matches Tolaria's sidebar; the colour source is chosen on the Home or Types section header.
 - The sidebar shows the hub hierarchy (Topics and Responsibilities → Projects → subprojects) with note counts; click a hub to centre on it, ◎ or Alt-click to isolate its subtree. Each Type row expands to its notes.
 - Reading: the detail panel renders the note's Markdown (callouts, tables, images from the vault) with wikilinks that navigate the graph, next to a Links tab grouping relationships by kind.
 - Group hulls: a tinted region behind each home group at the current roll-up level (the union of a soft disc per member note, so it follows where notes sit) with the group's name at its median position; fades while a note is hovered or selected. Toggle in Options.
@@ -34,7 +34,11 @@ Other commands:
 ```bash
 pnpm typecheck
 pnpm graph:dump ~/Second-Brain -- --summary   # parser statistics and unresolved links
+pnpm graph:homes ~/Second-Brain               # the inferred group hierarchy plus audit lists
+                                              # (--no-has, --hubs=Project,Topic, --json)
 ```
+
+`graph:homes` prints the hierarchy the viewer infers and four audit lists: Projects whose parent is a Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. It is meant as input for reorganising `belongs_to` in the vault; the viewer never writes to the vault.
 
 ## How it works
 

@@ -3,7 +3,7 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { applyColors, buildGraph, neighborhood, typeColorMap, type ColorMode, type Positions } from "./graph/build";
-import { buildHomeIndex, subtreeMembers, type HomeLevel } from "./graph/home";
+import { DEFAULT_HUB_TYPES, buildHomeIndex, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
 import { useSavedLayout, useVault } from "./useVault";
 
 function useTheme() {
@@ -92,7 +92,8 @@ export default function App() {
   }, [data, seed]);
   const graph = built?.graph ?? null;
   const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
-  const homeIndex = useMemo(() => (data ? buildHomeIndex(data) : null), [data]);
+  const [homeSettings, setHomeSettings] = useState<HomeSettings>({ hubTypes: new Set(DEFAULT_HUB_TYPES), useHas: true });
+  const homeIndex = useMemo(() => (data ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 
   const [colorMode, setColorMode] = useState<ColorMode>("home");
@@ -323,6 +324,8 @@ export default function App() {
         types={data.types}
         typeColors={typeColors}
         homeIndex={homeIndex}
+        homeSettings={homeSettings}
+        onHomeSettings={setHomeSettings}
         colorMode={colorMode}
         homeLevel={homeLevel}
         onColorMode={(mode, level) => {
@@ -367,7 +370,10 @@ export default function App() {
             <strong>{hoveredNode.title}</strong>
             <div className="muted small">
               {hoveredNode.status ?? "—"} · {hoveredNode.inDegree} in · {hoveredNode.outDegree} out
-              {hoveredNode.home && hoveredNode.home !== hoveredNode.id && ` · ${byId.get(hoveredNode.home)?.title ?? hoveredNode.home}`}
+              {(() => {
+                const h = homeIndex.homes.get(hoveredNode.id)?.hub;
+                return h && h !== hoveredNode.id ? ` · ${byId.get(h)?.title ?? h}` : "";
+              })()}
             </div>
             {hoveredNode.summary && <p>{hoveredNode.summary}</p>}
           </div>

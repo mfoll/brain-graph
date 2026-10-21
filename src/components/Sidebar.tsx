@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
 import type { ColorMode } from "../graph/build";
-import { TYPE_SHAPES, type HomeIndex, type HomeLevel, type Hub } from "../graph/home";
+import { TYPE_SHAPES, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
 
 const SHAPE_GLYPH: Record<string, string> = { diamond: "◆", square: "■", triangle: "▲", circle: "●" };
 const glyphFor = (type: string) => SHAPE_GLYPH[TYPE_SHAPES[type] ?? "circle"];
@@ -30,6 +30,8 @@ interface Props {
   types: TypeInfo[];
   typeColors: Map<string, string>;
   homeIndex: HomeIndex;
+  homeSettings: HomeSettings;
+  onHomeSettings: (s: HomeSettings) => void;
   colorMode: ColorMode;
   homeLevel: HomeLevel;
   onColorMode: (mode: ColorMode, level: HomeLevel) => void;
@@ -43,9 +45,33 @@ interface Props {
 const LEVEL_LABELS = ["Area", "Project", "Subproject"];
 
 export function Sidebar(p: Props) {
-  const { data, types, typeColors, homeIndex, colorMode, homeLevel, edgeKinds, filters, onChange, selected, onSelect } = p;
+  const { data, types, typeColors, homeIndex, homeSettings, colorMode, homeLevel, edgeKinds, filters, onChange, selected, onSelect } = p;
+  const [showGrouping, setShowGrouping] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
+
+  // When a hub is selected on the graph, reveal and scroll to its row.
+  useEffect(() => {
+    if (!selected || !homeIndex.hubs.has(selected)) return;
+    setOpenHubs((open) => {
+      const next = new Set(open);
+      let p = homeIndex.hubs.get(selected)?.parent ?? null;
+      while (p) {
+        next.add(p);
+        p = homeIndex.hubs.get(p)?.parent ?? null;
+      }
+      return next;
+    });
+    const t = setTimeout(() => asideRef.current?.querySelector(`[data-hub="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: "nearest" }), 50);
+    return () => clearTimeout(t);
+  }, [selected, homeIndex]);
   const [openTypes, setOpenTypes] = useState<Set<string>>(new Set());
   const [openHubs, setOpenHubs] = useState<Set<string>>(() => new Set(homeIndex.roots.slice(0, 3)));
+  const toggleHubType = (type: string) => {
+    const next = new Set(homeSettings.hubTypes);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    if (next.size) p.onHomeSettings({ ...homeSettings, hubTypes: next });
+  };
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
 
   const toggleIn = (set: Set<string>, value: string) => {
@@ -81,7 +107,7 @@ export function Sidebar(p: Props) {
     const open = openHubs.has(id);
     const isolated = filters.subtree === id;
     return (
-      <li key={id} className={`tree-row${isolated ? " isolated" : ""}${selected === id ? " selected" : ""}`}>
+      <li key={id} className={`tree-row${isolated ? " isolated" : ""}${selected === id ? " selected" : ""}`} data-hub={id}>
         <div className="tree-line" style={{ paddingLeft: hub.depth * 12 }}>
           <button className={`disclosure${hub.children.length ? "" : " empty"}`} onClick={() => setOpenHubs(toggleIn(openHubs, id))} aria-label={open ? "Collapse" : "Expand"}>
             {hub.children.length ? (open ? "▾" : "▸") : ""}
@@ -95,8 +121,8 @@ export function Sidebar(p: Props) {
             <span className="name">{hub.title}</span>
             <span className="count">{hub.subtreeCount}</span>
           </button>
-          <button className={`iso${isolated ? " on" : ""}`} onClick={() => isolate(id)} title={isolated ? "Show everything again" : "Show only this subtree"}>
-            ◎
+          <button className={`iso${isolated ? " on" : ""}`} onClick={() => isolate(id)} title={isolated ? "Show all notes again" : "Hide every note outside this group (the view does not move)"}>
+            {isolated ? "all" : "only"}
           </button>
         </div>
         {open && hub.children.length > 0 && <ul className="tree">{hub.children.map(renderHub)}</ul>}
@@ -105,7 +131,7 @@ export function Sidebar(p: Props) {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" ref={asideRef}>
       <section className={colorMode === "home" ? "colour-source" : ""}>
         <header>
           <h2>Home</h2>
@@ -127,6 +153,28 @@ export function Sidebar(p: Props) {
             </span>
             <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onColorMode("home", Number(e.target.value) as HomeLevel)} />
           </label>
+        )}
+        <button className="link small grouping-toggle" onClick={() => setShowGrouping((v) => !v)}>
+          {showGrouping ? "▾" : "▸"} grouping: {[...homeSettings.hubTypes].join(", ")}
+          {homeSettings.useHas ? "" : " · belongs_to only"}
+        </button>
+        {showGrouping && (
+          <div className="grouping">
+            <div className="muted small">Types that act as groups. A note joins the nearest one reached through its <code>belongs_to</code> chain.</div>
+            <div className="chips">
+              {types
+                .filter((t) => t.name !== "Type" && t.name !== "(untyped)")
+                .map((t) => (
+                  <button key={t.name} className={`chip${homeSettings.hubTypes.has(t.name) ? " on" : ""}`} onClick={() => toggleHubType(t.name)}>
+                    {t.name}
+                  </button>
+                ))}
+            </div>
+            <label className="row" title="Tolaria treats `has` as the inverse of `belongs_to`. This vault uses it for selective entry points, so it is only followed when belongs_to reaches no group.">
+              <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
+              Fall back to <code>has</code> links
+            </label>
+          </div>
         )}
         <ul className="tree">{homeIndex.roots.map(renderHub)}</ul>
       </section>

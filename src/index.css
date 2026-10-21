@@ -36,7 +36,7 @@ button { font: inherit; color: inherit; }
   grid-template-areas: "top top top top top" "side gutter stage gutter2 note";
   height: 100%;
 }
-.app.with-panel { grid-template-columns: var(--sidebar-w) 6px 1fr 6px var(--panel-w); }
+.app.with-panel { grid-template-columns: var(--sidebar-w) 6px minmax(240px, 1fr) 6px min(var(--panel-w), calc(100vw - var(--sidebar-w) - 252px)); }
 .gutter-right { grid-area: gutter2; border-right: 0; border-left: 1px solid var(--border); }
 .gutter {
   grid-area: gutter;
@@ -218,3 +218,10 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .callout-tip, .callout-success { border-left-color: #22c55e; }
 .callout-question, .callout-todo { border-left-color: #eab308; }
 .callout-example, .callout-abstract { border-left-color: #8b5cf6; }
+
+.grouping-toggle { display: block; padding: 2px 6px 6px; text-align: left; }
+.grouping { margin: 0 6px 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.chip { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.grouping code, .grouping-toggle code { font-size: 11px; }
