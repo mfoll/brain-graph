@@ -34,8 +34,49 @@ const LAYOUT_RUNS = {
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
+const SIDEBAR_KEY = "brain-graph.sidebarWidth";
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 640;
+
+/** Draggable sidebar width, remembered per browser. */
+function useSidebarWidth() {
+  const [width, setWidth] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(SIDEBAR_KEY));
+      return v >= SIDEBAR_MIN && v <= SIDEBAR_MAX ? v : 260;
+    } catch {
+      return 260;
+    }
+  });
+  const [dragging, setDragging] = useState(false);
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    setDragging(true);
+    const move = (ev: MouseEvent) => setWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + ev.clientX - startX)));
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      setWidth((w) => {
+        try {
+          localStorage.setItem(SIDEBAR_KEY, String(w));
+        } catch {
+          /* private mode: ignore */
+        }
+        return w;
+      });
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+  return { width, dragging, startDrag };
+}
+
 export default function App() {
   const { data, error, reload } = useVault();
+  const sidebar = useSidebarWidth();
   const saved = useSavedLayout();
   const theme = useTheme();
 
@@ -213,7 +254,7 @@ export default function App() {
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
 
   return (
-    <div className="app">
+    <div className={`app${sidebar.dragging ? " resizing" : ""}`} style={{ "--sidebar-w": `${sidebar.width}px` } as React.CSSProperties}>
       <header className="topbar">
         <div className="brand">
           <strong>{data.vault.label}</strong>
@@ -292,6 +333,8 @@ export default function App() {
         selected={selected}
         onSelect={(id) => select(id, true)}
       />
+
+      <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />
 
       <main className="stage">
         <GraphView
