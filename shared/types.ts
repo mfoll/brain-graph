@@ -48,3 +48,11 @@ export interface VaultGraph {
   edgeKinds: { kind: string; count: number }[];
   unresolved: { from: string; raw: string }[];
 }
+
+export interface VaultInfo {
+  /** Tolaria deep-link slug (slugified label), also the key for layouts and settings. */
+  slug: string;
+  label: string;
+  path: string;
+  isDefault: boolean;
+}

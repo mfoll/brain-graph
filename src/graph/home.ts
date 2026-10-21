@@ -12,6 +12,28 @@ export interface HomeSettings {
 
 export const DEFAULT_HUB_TYPES = ["Project", "Responsibility", "Topic"];
 
+/** Relationship keys that express "this note is part of that one": Tolaria's belongs_to plus parent_* keys (used by the archive). */
+export const isParentKind = (kind: string) => kind === "belongs_to" || kind.startsWith("parent_");
+
+/**
+ * Default grouping for a vault: the Second Brain hub types when the vault has them, otherwise the
+ * types most often found on the receiving end of a parent link (for the archive: Paper, Grant).
+ */
+export function defaultHubTypes(data: VaultGraph): string[] {
+  const present = new Set(data.types.map((t) => t.name));
+  const std = DEFAULT_HUB_TYPES.filter((t) => present.has(t));
+  if (std.length) return std;
+  const byId = new Map(data.nodes.map((n) => [n.id, n.type ?? "(untyped)"]));
+  const counts = new Map<string, number>();
+  for (const e of data.edges) {
+    const target = isParentKind(e.kind) ? e.target : e.kind === "has" ? e.source : null;
+    if (target) counts.set(byId.get(target)!, (counts.get(byId.get(target)!) ?? 0) + 1);
+  }
+  const ranked = [...counts.entries()].filter(([t]) => t !== "(untyped)").sort((a, b) => b[1] - a[1]);
+  const top = ranked.filter(([, c]) => c >= Math.max(3, (ranked[0]?.[1] ?? 0) * 0.15)).map(([t]) => t);
+  return top.length ? top.slice(0, 3) : data.types.length ? [data.types[0].name] : [];
+}
+
 export interface Hub {
   id: string;
   title: string;
@@ -73,7 +95,7 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
     if (child !== parent) (map.get(child) ?? map.set(child, []).get(child)!).push(parent);
   };
   for (const e of data.edges) {
-    if (e.kind === "belongs_to") link(strong, e.source, e.target);
+    if (isParentKind(e.kind)) link(strong, e.source, e.target);
     else if (e.kind === "has") link(weak, e.target, e.source);
   }
   const isHub = (id: string) => settings.hubTypes.has(byId.get(id)?.type ?? "");

@@ -30,7 +30,7 @@ export interface EdgeAttrs {
 }
 
 const EDGE_WEIGHTS: Record<string, number> = { belongs_to: 4, has: 4, surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
-export const edgeWeight = (kind: string) => EDGE_WEIGHTS[kind] ?? 1.5;
+export const edgeWeight = (kind: string) => EDGE_WEIGHTS[kind] ?? (kind.startsWith("parent_") ? 4 : 1.5);
 
 export type ColorMode = "type" | "home";
 

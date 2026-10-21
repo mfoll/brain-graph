@@ -3,8 +3,8 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { applyColors, buildGraph, neighborhood, typeColorMap, type ColorMode, type Positions } from "./graph/build";
-import { DEFAULT_HUB_TYPES, buildHomeIndex, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
-import { useSavedLayout, useVault } from "./useVault";
+import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
+import { useSavedLayout, useVault, useVaults } from "./useVault";
 
 function useTheme() {
   const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -71,48 +71,83 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
   return { width, dragging, startDrag };
 }
 
+const VAULT_KEY = "brain-graph.vault";
+
 export default function App() {
-  const { data, error, reload } = useVault();
-  const sidebar = usePanelWidth("brain-graph.sidebarWidth", 260, "left");
-  const panel = usePanelWidth("brain-graph.panelWidth", 420, "right", 280, 900);
-  const saved = useSavedLayout();
-  const theme = useTheme();
-
-  // Positions used to seed the graph: the saved layout on first load, nothing after a reset.
-  // Later layout runs update `latestPositions` (a ref, so saving never rebuilds the graph).
-  const [seed, setSeed] = useState<{ positions: Positions | null; nonce: number } | undefined>(undefined);
-  useEffect(() => {
-    if (saved.layout !== undefined && seed === undefined) setSeed({ positions: saved.layout?.positions ?? null, nonce: 0 });
-  }, [saved.layout, seed]);
-  const latestPositions = useRef<Positions | null>(null);
-
-  const built = useMemo(() => {
-    if (!data || seed === undefined) return null;
-    return buildGraph(data, latestPositions.current ?? seed.positions);
-  }, [data, seed]);
-  const graph = built?.graph ?? null;
-  const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
-  const [homeSettings, setHomeSettingsState] = useState<HomeSettings>(() => {
+  const { vaults, error: vaultsError } = useVaults();
+  const [vaultSlug, setVaultSlugState] = useState<string | null>(() => {
     try {
-      const raw = localStorage.getItem("brain-graph.grouping");
-      if (raw) {
-        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean };
-        if (Array.isArray(v.hubTypes) && v.hubTypes.length) return { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false };
-      }
+      return localStorage.getItem(VAULT_KEY);
     } catch {
-      /* ignore */
+      return null;
     }
-    return { hubTypes: new Set(DEFAULT_HUB_TYPES), useHas: true };
   });
-  const setHomeSettings = (next: HomeSettings) => {
-    setHomeSettingsState(next);
+  // Resolve the initial vault once the list is known: remembered choice if still served, else the default.
+  useEffect(() => {
+    if (!vaults?.length) return;
+    if (vaultSlug && vaults.some((v) => v.slug === vaultSlug)) return;
+    setVaultSlugState((vaults.find((v) => v.isDefault) ?? vaults[0]).slug);
+  }, [vaults, vaultSlug]);
+  const setVaultSlug = (slug: string) => {
+    setVaultSlugState(slug);
     try {
-      localStorage.setItem("brain-graph.grouping", JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas }));
+      localStorage.setItem(VAULT_KEY, slug);
     } catch {
       /* ignore */
     }
   };
-  const homeIndex = useMemo(() => (data ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings]);
+  const { data, error, reload } = useVault(vaultSlug);
+  const sidebar = usePanelWidth("brain-graph.sidebarWidth", 260, "left");
+  const panel = usePanelWidth("brain-graph.panelWidth", 420, "right", 280, 900);
+  const saved = useSavedLayout(vaultSlug);
+  const theme = useTheme();
+
+  // Positions used to seed the graph: the saved layout on first load, nothing after a reset.
+  // Later layout runs update `latestPositions` (a ref, so saving never rebuilds the graph).
+  const [seed, setSeed] = useState<{ positions: Positions | null; nonce: number; vault: string | null } | undefined>(undefined);
+  const latestPositions = useRef<Positions | null>(null);
+  useEffect(() => {
+    if (saved.layout === undefined) return;
+    if (seed === undefined || seed.vault !== vaultSlug) {
+      latestPositions.current = null;
+      setSeed({ positions: saved.layout?.positions ?? null, nonce: 0, vault: vaultSlug });
+    }
+  }, [saved.layout, seed, vaultSlug]);
+
+  const built = useMemo(() => {
+    if (!data || seed === undefined || seed.vault !== data.vault.slug) return null;
+    return buildGraph(data, latestPositions.current ?? seed.positions);
+  }, [data, seed]);
+  const graph = built?.graph ?? null;
+  const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
+  // Grouping is remembered per vault; the default depends on the vault's ontology.
+  const [homeSettings, setHomeSettingsState] = useState<HomeSettings | null>(null);
+  const [homeSettingsVault, setHomeSettingsVault] = useState<string | null>(null);
+  const vaultDefaults = useMemo(() => (data ? defaultHubTypes(data) : []), [data]);
+  useEffect(() => {
+    if (!data || homeSettingsVault === data.vault.slug) return;
+    let next: HomeSettings = { hubTypes: new Set(vaultDefaults), useHas: true };
+    try {
+      const raw = localStorage.getItem(`brain-graph.grouping.${data.vault.slug}`);
+      if (raw) {
+        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean };
+        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false };
+      }
+    } catch {
+      /* ignore */
+    }
+    setHomeSettingsState(next);
+    setHomeSettingsVault(data.vault.slug);
+  }, [data, vaultDefaults, homeSettingsVault]);
+  const setHomeSettings = (next: HomeSettings) => {
+    setHomeSettingsState(next);
+    try {
+      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas }));
+    } catch {
+      /* ignore */
+    }
+  };
+  const homeIndex = useMemo(() => (data && homeSettings && homeSettingsVault === data.vault.slug ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings, homeSettingsVault]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 
   const [colorMode, setColorMode] = useState<ColorMode>("home");
@@ -131,15 +166,18 @@ export default function App() {
     labels: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
-  const [initialised, setInitialised] = useState(false);
+  const [initialised, setInitialised] = useState<string | null>(null);
   useEffect(() => {
-    if (!data || initialised) return;
+    if (!data || initialised === data.vault.slug) return;
     setFilters((f) => ({
       ...f,
       types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
       kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
+      subtree: null,
     }));
-    setInitialised(true);
+    setSelected(null);
+    setHovered(null);
+    setInitialised(data.vault.slug);
   }, [data, initialised]);
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -173,7 +211,7 @@ export default function App() {
     if (fromScratch) {
       await saved.reset();
       latestPositions.current = null;
-      setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1 }));
+      setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1, vault: vaultSlug }));
       setFitRequest((n) => n + 1);
     } else setLayoutRun("recompute");
   };
@@ -264,8 +302,9 @@ export default function App() {
     if (id && center) setFocusRequest({ node: id, nonce: Date.now() });
   };
 
-  if (error) return <div className="status error">Could not load the vault graph: {error}</div>;
-  if (!data || !graph || !filteredGraph || !homeIndex) return <div className="status">Parsing vault…</div>;
+  if (error || vaultsError) return <div className="status error">Could not load the vault graph: {error ?? vaultsError}</div>;
+  if (vaults && vaults.length === 0) return <div className="status error">No vault to show: register one in Tolaria or start with VAULT=~/path/to/vault.</div>;
+  if (!data || !graph || !filteredGraph || !homeIndex || !homeSettings) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
   const selectedNode = selected ? byId.get(selected) : null;
@@ -279,7 +318,17 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <strong>{data.vault.label}</strong>
+          {vaults && vaults.length > 1 ? (
+            <select className="vault-select" value={data.vault.slug} onChange={(e) => setVaultSlug(e.target.value)} title={data.vault.path}>
+              {vaults.map((v) => (
+                <option key={v.slug} value={v.slug}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <strong>{data.vault.label}</strong>
+          )}
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
             {saved.layout && !layoutRun && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
@@ -344,6 +393,7 @@ export default function App() {
         typeColors={typeColors}
         homeIndex={homeIndex}
         homeSettings={homeSettings}
+        homeDefaults={vaultDefaults}
         onHomeSettings={setHomeSettings}
         colorMode={colorMode}
         homeLevel={homeLevel}

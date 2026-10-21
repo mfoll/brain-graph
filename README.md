@@ -24,10 +24,12 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 
 ```bash
 pnpm install
-VAULT=~/Second-Brain VAULT_LABEL="Second Brain" pnpm dev
+pnpm dev
 ```
 
-Then open <http://localhost:5178>. `VAULT` defaults to `~/Second-Brain`. Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label.
+Then open <http://localhost:5178>. Every vault registered and mounted in Tolaria (read from `~/Library/Application Support/com.tolaria.app/vaults.json`) appears in the dropdown at the top left; Tolaria's default workspace is selected first and your last choice is remembered. Each vault has its own graph, saved layout, filters and grouping default: the Second Brain ontology gets Project / Responsibility / Topic, the Scientific Production Archive gets Paper / Grant (the types most often on the receiving end of `parent_*` and `belongs_to` links). Only the selected vault is read; the others are not parsed until you switch to them.
+
+Without Tolaria, or to add a vault that is not registered, start with `VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev`; that vault becomes the default. Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label.
 
 Other commands:
 
@@ -48,4 +50,4 @@ pnpm graph:homes ~/Second-Brain               # the inferred group hierarchy plu
 
 ## Status
 
-Prototype (October 2026). Hulls are a 2D canvas layer behind the WebGL stage (the stage background is transparent and the container paints it). Known gaps: no multi-vault mode; the Tolaria deep-link slug is inferred from the vault label (verified for the work vault), not read from Tolaria's registry.
+Prototype (October 2026). Vaults are shown one at a time; cross-vault links are not drawn (there are almost none as wikilinks; the vaults reference each other through Source pointers). Hulls are a 2D canvas layer behind the WebGL stage (the stage background is transparent and the container paints it). Known gaps: the Tolaria deep-link slug is inferred from the vault label (verified for the work vault), not read from Tolaria's registry.
