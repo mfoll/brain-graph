@@ -11,7 +11,8 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 - Hover: tooltip with type, status, link counts and the note's first paragraph; neighbours stay lit, the rest fades.
 - Click: detail panel with summary, outgoing and incoming relationships grouped by kind, frontmatter, **Open in Tolaria** (`tolaria://<vault-slug>/<path>.md`) and copy-wikilink.
 - Sidebar: toggle types and relationship kinds (Alt-click isolates one), hide archived notes, hide orphans, and a focus-depth slider that keeps only the selected note's neighbourhood.
-- Search box with Enter to jump; ForceAtlas2 layout runs in a web worker and settles after a few seconds (pause/run button).
+- Search box with Enter to jump.
+- Layout: ForceAtlas2 stepped a couple of iterations per animation frame (about 3 ms each for 1,300 notes), run as a cooling schedule: full speed for the first third, then the step size shrinks exponentially and the iteration rate halves, so nodes come to rest before the 12-second time box ends and the map is saved still. **Recompute layout** reruns it from the current positions, for example after changing which relationship kinds are shown; **Stop** keeps the positions of the moment. The worker-based supervisor was dropped because ForceAtlas2's adaptive speed cancels any damping applied to the positions it returns.
 - Live reload: the dev server watches the vault and re-parses on change.
 - Stable map: node positions are saved to `.tmp/layouts/<vault-slug>.json` when a layout run stops (or you pause it). The next start restores them without running the layout; only new notes get a short settling run, placed next to their linked notes while everything else stays pinned. **Reset layout** forgets the saved positions.
 

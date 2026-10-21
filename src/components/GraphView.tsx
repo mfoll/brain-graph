@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import FA2Layout from "graphology-layout-forceatlas2/worker";
 import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 
@@ -18,18 +17,91 @@ export interface GraphViewProps {
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
   onLayoutStopped: (positions: Positions) => void;
+  /** Progress of the current layout run, 0..1. */
+  onLayoutProgress?: (progress: number) => void;
   focusRequest: { node: string; nonce: number } | null;
   fitRequest: number;
 }
 
 type GS = { focusActive: boolean };
+
+// ForceAtlas2 never "finishes": nodes keep jittering around their equilibrium, and its adaptive
+// global speed defeats any damping applied to the positions it returns. So instead of the worker
+// supervisor we step the synchronous layout a few iterations per animation frame (about 3 ms each
+// for this vault). Each call starts from a fresh speed state, which makes `slowDown` a direct lever
+// on the step size: the run goes at full speed first, then slowDown grows exponentially and motion
+// dies out before the time box ends.
+const BASE_SLOWDOWN = 6;
+const COOL_START = 0.35; // fraction of the run before cooling starts
+const COOL_FACTOR = 2000; // slowDown multiplier reached at the end of the run
+// Displacement per second is (step size) x (iterations per second), so cooling also drops
+// from two iterations per frame to one. At the end a node moves well under 0.1 unit per second
+// on a map about 800 units wide.
+function scheduleAt(progress: number): { slowDown: number; iterations: number } {
+  if (progress <= COOL_START) return { slowDown: BASE_SLOWDOWN, iterations: 2 };
+  const t = (progress - COOL_START) / (1 - COOL_START);
+  return { slowDown: BASE_SLOWDOWN * COOL_FACTOR ** (t * t), iterations: 1 };
+}
+
+interface LayoutRunner {
+  settings: ReturnType<typeof forceAtlas2.inferSettings>;
+  iterations: number;
+  start(): void;
+  stop(): void;
+  isRunning(): boolean;
+  kill(): void;
+}
+
+function createLayoutRunner(graph: BrainGraph): LayoutRunner {
+  let frame: number | null = null;
+  let running = false;
+  const runner: LayoutRunner = {
+    iterations: 2,
+    settings: {
+      ...forceAtlas2.inferSettings(graph),
+      gravity: 1,
+      scalingRatio: 10,
+      strongGravityMode: true,
+      slowDown: BASE_SLOWDOWN,
+      barnesHutOptimize: true,
+      barnesHutTheta: 0.6,
+      adjustSizes: false,
+      edgeWeightInfluence: 0.5,
+    },
+    start() {
+      if (running) return;
+      running = true;
+      const step = () => {
+        if (!running) return;
+        forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings });
+        frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    },
+    stop() {
+      running = false;
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+    },
+    isRunning: () => running,
+    kill() {
+      runner.stop();
+    },
+  };
+  return runner;
+}
+
 type NS = { isSelected: boolean };
-type Helpers = { __highlight: (n: string) => void; __clear: () => void; __fit: () => void };
+type Helpers = {
+  __highlight: (n: string) => void;
+  __clear: () => void;
+  __fit: () => void;
+};
 
 export function GraphView(props: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma<NodeAttrs, EdgeAttrs, Record<string, unknown>, NS, {}, GS> | null>(null);
-  const layoutRef = useRef<FA2Layout | null>(null);
+  const layoutRef = useRef<LayoutRunner | null>(null);
   const highlightedRef = useRef<{ nodes: string[]; edges: string[] }>({ nodes: [], edges: [] });
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -156,19 +228,8 @@ export function GraphView(props: GraphViewProps) {
     });
     ro.observe(container);
 
-    const layout = new FA2Layout(graph, {
-      settings: {
-        ...forceAtlas2.inferSettings(graph),
-        gravity: 1,
-        scalingRatio: 10,
-        strongGravityMode: true,
-        slowDown: 12, // higher = less jitter; the run is time-boxed anyway
-        barnesHutTheta: 0.6,
-        barnesHutOptimize: true,
-        adjustSizes: false,
-        edgeWeightInfluence: 0.5,
-      },
-    });
+    const layout = createLayoutRunner(graph);
+    if (import.meta.env.DEV) Object.assign(window as unknown as Record<string, unknown>, { __layout: layout, __fa2: forceAtlas2, __graph: graph });
     layoutRef.current = layout;
 
     // Fit the camera's reference frame to the visible nodes only, so hidden or far-flung
@@ -213,21 +274,33 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins } = props;
+    const { graph, layoutPins, layoutDuration } = props;
+    const reset = () => Object.assign(layout, { iterations: 2, settings: { ...layout.settings, slowDown: BASE_SLOWDOWN } });
     const stop = () => {
       layout.stop();
+      reset();
       if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
       fit();
+      propsRef.current.onLayoutProgress?.(0);
       propsRef.current.onLayoutStopped(collectPositions(graph));
     };
     if (props.layoutRunning) {
       if (!layout.isRunning()) {
-        // FA2 reads node attributes when it starts, so pin before starting.
+        // FA2 reads the `fixed` attribute on every step, so pin before starting.
         if (layoutPins) graph.forEachNode((n) => graph.setNodeAttribute(n, "fixed", layoutPins.has(n)));
+        reset();
         layout.start();
       }
-      const tick = setInterval(fit, 700);
-      const t = setTimeout(stop, props.layoutDuration);
+      const started = performance.now();
+      const tick = setInterval(() => {
+        const progress = Math.min(1, (performance.now() - started) / layoutDuration);
+        const sched = scheduleAt(progress);
+        layout.settings.slowDown = sched.slowDown;
+        layout.iterations = sched.iterations;
+        propsRef.current.onLayoutProgress?.(progress);
+        fit();
+      }, 250);
+      const t = setTimeout(stop, layoutDuration);
       return () => {
         clearInterval(tick);
         clearTimeout(t);

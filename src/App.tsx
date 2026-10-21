@@ -69,6 +69,7 @@ export default function App() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   const [layoutRunning, setLayoutRunning] = useState(false);
+  const [layoutProgress, setLayoutProgress] = useState(0);
   // A restored map needs no layout; new notes get a short settling run with everything else pinned.
   const layoutPins = useMemo(() => {
     if (!built || !built.restored || built.fresh.length === 0) return null;
@@ -202,14 +203,23 @@ export default function App() {
           )}
         </div>
         <div className="toolbar">
-          <button className="button" onClick={() => setLayoutRunning((r) => !r)}>
-            {layoutRunning ? "⏸ Pause layout" : "▶ Run layout"}
+          <button
+            className="button"
+            onClick={() => setLayoutRunning((r) => !r)}
+            title={
+              layoutRunning
+                ? "Stop now and keep the current positions"
+                : "Run the force-directed layout again from the current positions. It cools down and saves by itself in about 12 seconds; useful after changing which relationship kinds are shown."
+            }
+          >
+            {layoutRunning ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
           <button className="button" onClick={resetLayout} title="Forget saved positions and compute a fresh layout">Reset layout</button>
           <button className="button" onClick={reload} title={`Parsed ${new Date(data.generatedAt).toLocaleTimeString()}`}>↻</button>
           <button className="button" onClick={theme.toggle} title="Toggle theme">{theme.dark ? "☀" : "☾"}</button>
         </div>
+        {layoutRunning && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
 
       <Sidebar
@@ -237,6 +247,7 @@ export default function App() {
           layoutPins={layoutPins}
           layoutDuration={layoutPins ? 5000 : 12000}
           onLayoutStopped={onLayoutStopped}
+          onLayoutProgress={setLayoutProgress}
           focusRequest={focusRequest}
           fitRequest={fitRequest}
         />

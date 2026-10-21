@@ -36,6 +36,7 @@ button { font: inherit; color: inherit; }
 }
 .topbar {
   grid-area: top;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -43,6 +44,7 @@ button { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
+.progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); transition: width .25s linear; }
 .brand { display: flex; flex-direction: column; line-height: 1.1; min-width: 200px; }
 .brand .muted { font-size: 12px; }
 .search { position: relative; flex: 1; max-width: 520px; }
