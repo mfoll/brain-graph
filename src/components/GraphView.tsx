@@ -13,6 +13,8 @@ export interface GraphViewProps {
   layoutPins: Set<string> | null;
   /** Milliseconds before the layout stops by itself. */
   layoutDuration: number;
+  /** Initial ForceAtlas2 slowDown: ~8 from scratch, ~16 to nudge an existing map. */
+  layoutStart: number;
   theme: { background: string; label: string; labelHalo: string };
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
@@ -31,16 +33,13 @@ type GS = { focusActive: boolean };
 // for this vault). Each call starts from a fresh speed state, which makes `slowDown` a direct lever
 // on the step size: the run goes at full speed first, then slowDown grows exponentially and motion
 // dies out before the time box ends.
-const BASE_SLOWDOWN = 6;
-const COOL_START = 0.35; // fraction of the run before cooling starts
-const COOL_FACTOR = 2000; // slowDown multiplier reached at the end of the run
-// Displacement per second is (step size) x (iterations per second), so cooling also drops
-// from two iterations per frame to one. At the end a node moves well under 0.1 unit per second
-// on a map about 800 units wide.
-function scheduleAt(progress: number): { slowDown: number; iterations: number } {
-  if (progress <= COOL_START) return { slowDown: BASE_SLOWDOWN, iterations: 2 };
-  const t = (progress - COOL_START) / (1 - COOL_START);
-  return { slowDown: BASE_SLOWDOWN * COOL_FACTOR ** (t * t), iterations: 1 };
+const COOL_FACTOR = 400; // slowDown multiplier reached at the end of the run
+// The run starts already damped (`start` slowDown, chosen by the caller: lower when laying out
+// from scratch, higher when nudging an existing map) and cools from the first frame, so there is
+// no fast "shaking" phase. Displacement per second is step size x iterations per second, so the
+// iteration rate also drops from two per frame to one.
+function scheduleAt(progress: number, start: number): { slowDown: number; iterations: number } {
+  return { slowDown: start * COOL_FACTOR ** progress ** 1.4, iterations: progress < 0.3 ? 2 : 1 };
 }
 
 interface LayoutRunner {
@@ -62,18 +61,18 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
       gravity: 1,
       scalingRatio: 10,
       strongGravityMode: true,
-      slowDown: BASE_SLOWDOWN,
+      slowDown: 10,
       barnesHutOptimize: true,
       barnesHutTheta: 0.6,
       adjustSizes: false,
-      edgeWeightInfluence: 0.5,
+      edgeWeightInfluence: 1,
     },
     start() {
       if (running) return;
       running = true;
       const step = () => {
         if (!running) return;
-        forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings });
+        forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
         frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
@@ -137,6 +136,7 @@ export function GraphView(props: GraphViewProps) {
             x: { attribute: "x" },
             y: { attribute: "y" },
             color: { attribute: "color" },
+            shape: { attribute: "shape", defaultValue: "circle" },
             label: { attribute: "label" },
             size: { whenState: "isHovered", then: (a) => a.size * 1.35, else: { attribute: "size" } },
             labelColor: theme.label,
@@ -274,8 +274,8 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration } = props;
-    const reset = () => Object.assign(layout, { iterations: 2, settings: { ...layout.settings, slowDown: BASE_SLOWDOWN } });
+    const { graph, layoutPins, layoutDuration, layoutStart } = props;
+    const reset = () => Object.assign(layout, { iterations: 2, settings: { ...layout.settings, slowDown: layoutStart } });
     const stop = () => {
       layout.stop();
       reset();
@@ -294,7 +294,7 @@ export function GraphView(props: GraphViewProps) {
       const started = performance.now();
       const tick = setInterval(() => {
         const progress = Math.min(1, (performance.now() - started) / layoutDuration);
-        const sched = scheduleAt(progress);
+        const sched = scheduleAt(progress, layoutStart);
         layout.settings.slowDown = sched.slowDown;
         layout.iterations = sched.iterations;
         propsRef.current.onLayoutProgress?.(progress);

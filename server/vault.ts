@@ -90,6 +90,63 @@ function pickColor(data: Record<string, unknown>): string | null {
   return typeof c === "string" ? c : null;
 }
 
+const HUB_TYPES = new Set(["Project", "Responsibility", "Topic"]);
+
+/**
+ * Roll every note up to its nearest hub. Parent links are `belongs_to` (note -> parent) and the
+ * inverse of `has` (parent has note). A Project found at the shortest distance wins; when the
+ * upward walk reaches only Responsibilities or Topics, the nearest of those is the home "area".
+ */
+function assignHomes(notes: Map<string, NoteNode>, edges: NoteEdge[]): void {
+  const parents = new Map<string, Set<string>>();
+  const link = (child: string, parent: string) => {
+    if (child === parent) return;
+    (parents.get(child) ?? parents.set(child, new Set()).get(child)!).add(parent);
+  };
+  for (const e of edges) {
+    if (e.kind === "belongs_to") link(e.source, e.target);
+    else if (e.kind === "has") link(e.target, e.source);
+  }
+  for (const note of notes.values()) {
+    if (note.type === "Type") continue;
+    const seen = new Set<string>([note.id]);
+    let frontier = [note.id];
+    let depth = 0;
+    let area: { ids: string[]; depth: number } | null = null;
+    while (frontier.length && depth < 8) {
+      depth++;
+      const next: string[] = [];
+      for (const n of frontier) {
+        for (const p of parents.get(n) ?? []) {
+          if (!seen.has(p)) {
+            seen.add(p);
+            next.push(p);
+          }
+        }
+      }
+      const projects = next.filter((id) => notes.get(id)?.type === "Project");
+      if (projects.length) {
+        note.home = projects[0];
+        note.homeKind = "project";
+        note.homeDepth = depth;
+        note.homeAlternatives = projects.slice(1);
+        break;
+      }
+      if (!area) {
+        const areas = next.filter((id) => HUB_TYPES.has(notes.get(id)?.type ?? ""));
+        if (areas.length) area = { ids: areas, depth };
+      }
+      frontier = next;
+    }
+    if (!note.home && area) {
+      note.home = area.ids[0];
+      note.homeKind = "area";
+      note.homeDepth = area.depth;
+      note.homeAlternatives = area.ids.slice(1);
+    }
+  }
+}
+
 export function slugify(label: string): string {
   return label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -107,7 +164,7 @@ export async function buildGraph(vaultPath: string, label?: string, slug?: strin
     const id = rel.slice(0, -3);
     const stem = path.posix.basename(id);
     const folder = path.posix.dirname(id) === "." ? "" : path.posix.dirname(id);
-    const text = await fs.readFile(file, "utf8");
+    const [text, stat] = await Promise.all([fs.readFile(file, "utf8"), fs.stat(file)]);
     const { data, body } = splitFrontmatter(text);
     const type = typeof data.type === "string" ? data.type : null;
 
@@ -145,6 +202,11 @@ export async function buildGraph(vaultPath: string, label?: string, slug?: strin
       properties,
       outDegree: 0,
       inDegree: 0,
+      modified: stat.mtime.toISOString(),
+      home: null,
+      homeKind: null,
+      homeDepth: null,
+      homeAlternatives: [],
     });
     const arr = byStem.get(stem) ?? [];
     arr.push(id);
@@ -177,6 +239,8 @@ export async function buildGraph(vaultPath: string, label?: string, slug?: strin
     notes.get(e.source)!.outDegree++;
     notes.get(e.target)!.inDegree++;
   }
+
+  assignHomes(notes, edges);
 
   const typeCounts = new Map<string, number>();
   for (const n of notes.values()) {

@@ -1,12 +1,14 @@
 import type { NoteNode, VaultGraph } from "../types";
 import type { BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
+import { homeChain, type HomeIndex } from "../graph/home";
 
 interface Props {
   data: VaultGraph;
   graph: BrainGraph;
   node: NoteNode;
   typeColors: Map<string, string>;
+  homeIndex: HomeIndex;
   onSelect: (id: string) => void;
   onClose: () => void;
 }
@@ -15,7 +17,8 @@ export function deepLink(data: VaultGraph, id: string): string {
   return `tolaria://${data.vault.slug}/${id.split("/").map(encodeURIComponent).join("/")}.md`;
 }
 
-export function NotePanel({ data, graph, node, typeColors, onSelect, onClose }: Props) {
+export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose }: Props) {
+  const chain = homeChain(node, homeIndex.hubs).filter((id) => id !== node.id).reverse(); // root first
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const out = new Map<string, string[]>();
   const inc = new Map<string, string[]>();
@@ -66,6 +69,19 @@ export function NotePanel({ data, graph, node, typeColors, onSelect, onClose }: 
         <span className="muted">{node.inDegree} in · {node.outDegree} out</span>
       </div>
       <code className="path">{node.id}.md</code>
+      {chain.length > 0 && (
+        <div className="crumbs">
+          {chain.map((id, i) => (
+            <span key={id}>
+              {i > 0 && <span className="muted"> › </span>}
+              <button className="link" onClick={() => onSelect(id)} style={{ color: homeIndex.hubs.get(id)?.color }}>
+                {homeIndex.hubs.get(id)?.title ?? id}
+              </button>
+            </span>
+          ))}
+          {node.homeAlternatives.length > 0 && <span className="muted small"> (+{node.homeAlternatives.length} other home)</span>}
+        </div>
+      )}
       {node.summary && <p className="summary">{node.summary}</p>}
       <div className="actions">
         <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>

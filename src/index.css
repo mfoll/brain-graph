@@ -146,3 +146,24 @@ button { font: inherit; color: inherit; }
 details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-radius: 6px; overflow: auto; }
 .status { display: grid; place-items: center; height: 100%; color: var(--muted); }
 .status.error { color: #f87171; }
+
+/* Sidebar tree and controls */
+.segmented { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 2px 6px 6px; }
+.segmented button { flex: 1; border: 0; background: none; padding: 5px 0; cursor: pointer; font-size: 13px; }
+.segmented button.on { background: var(--accent); color: #fff; }
+.tree, .instances { list-style: none; margin: 0; padding: 0; }
+.instances { margin: 2px 0 6px 26px; border-left: 1px solid var(--border); }
+.instances .tree-label { padding: 2px 6px; font-size: 12.5px; }
+.tree-line { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.tree-line:hover { background: var(--panel-2); }
+.tree-row.selected > .tree-line .name, .instances li.selected .name { color: var(--accent); font-weight: 600; }
+.tree-row.isolated > .tree-line { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.disclosure { width: 18px; flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 11px; }
+.disclosure.empty { cursor: default; }
+.tree-label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 4px 6px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }
+.tree-label .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iso { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 6px; font-size: 13px; opacity: 0; }
+.tree-line:hover .iso, .iso.on { opacity: 1; }
+.iso.on { color: var(--accent); }
+.legend > li > .tree-line .tree-label { padding: 4px 6px; }
+.crumbs { font-size: 12px; margin: -4px 0 8px; }

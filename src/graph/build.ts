@@ -2,11 +2,15 @@ import Graph from "graphology";
 import { circular } from "graphology-layout";
 import type { VaultGraph } from "../types";
 import { UNTYPED_COLOR, normalizeColor } from "./colors";
+import { TYPE_SHAPES, homeColor, type HomeIndex, type HomeLevel } from "./home";
 
 export interface NodeAttrs {
   label: string;
   type: string;
   color: string;
+  typeColor: string;
+  shape: string;
+  home: string | null;
   size: number;
   degree: number;
   x: number;
@@ -18,7 +22,25 @@ export interface NodeAttrs {
 }
 export interface EdgeAttrs {
   kind: string;
+  /** Layout pull: hierarchy links group notes around their project, body links barely count. */
+  weight: number;
   [key: string]: unknown;
+}
+
+const EDGE_WEIGHTS: Record<string, number> = { belongs_to: 4, has: 4, surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
+export const edgeWeight = (kind: string) => EDGE_WEIGHTS[kind] ?? 1.5;
+
+export type ColorMode = "type" | "home";
+
+/** Recolour (and reshape) nodes in place; Sigma picks the attribute changes up without a rebuild. */
+export function applyColors(graph: BrainGraph, mode: ColorMode, level: HomeLevel, data: VaultGraph, index: HomeIndex): void {
+  const byId = index.byId;
+  graph.updateEachNodeAttributes((id, a) => {
+    const note = byId.get(id);
+    if (mode === "type" || !note) return { ...a, color: a.typeColor, shape: "circle" };
+    return { ...a, color: homeColor(note, index, level), shape: TYPE_SHAPES[a.type] ?? "circle" };
+  }, { attributes: ["color", "shape"] });
+  void data;
 }
 
 export type BrainGraph = Graph<NodeAttrs, EdgeAttrs>;
@@ -55,10 +77,14 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   for (const n of data.nodes) {
     const degree = n.inDegree + n.outDegree;
     const type = n.type ?? "(untyped)";
+    const typeColor = colors.get(type) ?? UNTYPED_COLOR;
     graph.addNode(n.id, {
       label: n.title,
       type,
-      color: colors.get(type) ?? UNTYPED_COLOR,
+      color: typeColor,
+      typeColor,
+      shape: "circle",
+      home: n.home,
       size: 2.5 + Math.min(14, Math.sqrt(degree) * 1.15),
       degree,
       x: 0,
@@ -70,7 +96,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   }
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind });
+      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind) });
     }
   }
   // Seed positions deterministically so a first layout is reproducible between reloads.

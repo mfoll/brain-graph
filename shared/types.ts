@@ -13,6 +13,16 @@ export interface NoteNode {
   properties: Record<string, unknown>; // frontmatter minus relationship keys
   outDegree: number;
   inDegree: number;
+  /** Last modification time of the file (ISO). */
+  modified: string;
+  /** Nearest hub this note rolls up to through belongs_to / inverse has: a Project when one is
+   *  reachable, otherwise a Responsibility or Topic. Null when no chain reaches a hub. */
+  home: string | null;
+  homeKind: "project" | "area" | null;
+  /** Hops from the note to its home (1 = direct belongs_to). */
+  homeDepth: number | null;
+  /** Other hubs reachable at the same distance (multi-parent notes). */
+  homeAlternatives: string[];
 }
 
 export interface NoteEdge {

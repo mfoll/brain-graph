@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { buildGraph, neighborhood, typeColorMap, type Positions } from "./graph/build";
+import { applyColors, buildGraph, neighborhood, typeColorMap, type ColorMode, type Positions } from "./graph/build";
+import { buildHomeIndex, subtreeMembers, type HomeLevel } from "./graph/home";
 import { useSavedLayout, useVault } from "./useVault";
 
 function useTheme() {
@@ -25,6 +26,14 @@ function useTheme() {
   };
 }
 
+// Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
+const LAYOUT_RUNS = {
+  scratch: { duration: 8000, start: 8 },
+  recompute: { duration: 4000, start: 30 },
+  settle: { duration: 2500, start: 30 },
+} as const;
+type LayoutRun = keyof typeof LAYOUT_RUNS;
+
 export default function App() {
   const { data, error, reload } = useVault();
   const saved = useSavedLayout();
@@ -44,7 +53,11 @@ export default function App() {
   }, [data, seed]);
   const graph = built?.graph ?? null;
   const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
+  const homeIndex = useMemo(() => (data ? buildHomeIndex(data) : null), [data]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
+
+  const [colorMode, setColorMode] = useState<ColorMode>("home");
+  const [homeLevel, setHomeLevel] = useState<HomeLevel>(1);
 
   const [filters, setFilters] = useState<Filters>({
     types: new Set(),
@@ -52,6 +65,7 @@ export default function App() {
     hideArchived: true,
     hideOrphans: false,
     focusDepth: 0,
+    subtree: null,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState(false);
@@ -68,8 +82,12 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
-  const [layoutRunning, setLayoutRunning] = useState(false);
+  const [layoutRun, setLayoutRun] = useState<LayoutRun | null>(null);
   const [layoutProgress, setLayoutProgress] = useState(0);
+  const [focusRequest, setFocusRequest] = useState<{ node: string; nonce: number } | null>(null);
+  const [fitRequest, setFitRequest] = useState(0);
+  const [query, setQuery] = useState("");
+
   // A restored map needs no layout; new notes get a short settling run with everything else pinned.
   const layoutPins = useMemo(() => {
     if (!built || !built.restored || built.fresh.length === 0) return null;
@@ -78,28 +96,26 @@ export default function App() {
   }, [built]);
   useEffect(() => {
     if (!built) return;
-    if (!built.restored || built.fresh.length > 0) setLayoutRunning(true);
+    if (!built.restored) setLayoutRun("scratch");
+    else if (built.fresh.length > 0) setLayoutRun("settle");
   }, [built]);
   const onLayoutStopped = (positions: Positions) => {
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
-    setLayoutRunning(false);
+    setLayoutRun(null);
     void saved.save(positions);
   };
-  const resetLayout = async () => {
-    setLayoutRunning(false);
-    await saved.reset();
-    latestPositions.current = null;
-    setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1 }));
-    setFitRequest((n) => n + 1);
+  const recompute = async (fromScratch: boolean) => {
+    if (layoutRun) return setLayoutRun(null);
+    if (fromScratch) {
+      await saved.reset();
+      latestPositions.current = null;
+      setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1 }));
+      setFitRequest((n) => n + 1);
+    } else setLayoutRun("recompute");
   };
-  const [focusRequest, setFocusRequest] = useState<{ node: string; nonce: number } | null>(null);
-  const [fitRequest, setFitRequest] = useState(0);
-  const [query, setQuery] = useState("");
 
-  // Visible edge kinds are applied by hiding edges of other kinds: we model that by rebuilding
-  // the "effective" graph degree per node for the orphan filter, and by hiding edges in GraphView
-  // through node hiding only. Edge-kind hiding uses a filtered graph copy.
+  // Edge-kind filtering works on a copy of the graph; node filters use hidden state in the renderer.
   const filteredGraph = useMemo(() => {
     if (!graph || !data) return null;
     const g = graph.copy();
@@ -109,13 +125,20 @@ export default function App() {
     return g;
   }, [graph, data, filters.kinds]);
 
+  // Colours are node attributes, so switching mode never rebuilds the renderer.
+  useEffect(() => {
+    if (filteredGraph && data && homeIndex) applyColors(filteredGraph, colorMode, homeLevel, data, homeIndex);
+  }, [filteredGraph, data, homeIndex, colorMode, homeLevel]);
+
   const hidden = useMemo(() => {
     const set = new Set<string>();
-    if (!filteredGraph || !data) return set;
+    if (!filteredGraph || !data || !homeIndex) return set;
+    const members = filters.subtree ? subtreeMembers(filters.subtree, data, homeIndex) : null;
     for (const n of data.nodes) {
       const t = n.type ?? "(untyped)";
       if (!filters.types.has(t)) set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
+      else if (members && !members.has(n.id)) set.add(n.id);
     }
     if (filters.hideOrphans) {
       filteredGraph.forEachNode((n) => {
@@ -135,7 +158,7 @@ export default function App() {
       set.delete(selected);
     }
     return set;
-  }, [filteredGraph, data, filters, selected]);
+  }, [filteredGraph, data, homeIndex, filters, selected]);
 
   const matches = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
@@ -152,11 +175,12 @@ export default function App() {
   };
 
   if (error) return <div className="status error">Could not load the vault graph: {error}</div>;
-  if (!data || !graph || !filteredGraph) return <div className="status">Parsing vault…</div>;
+  if (!data || !graph || !filteredGraph || !homeIndex) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
   const selectedNode = selected ? byId.get(selected) : null;
   const visibleCount = data.nodes.length - hidden.size;
+  const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
 
   return (
     <div className="app">
@@ -165,7 +189,7 @@ export default function App() {
           <strong>{data.vault.label}</strong>
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
-            {saved.layout && !layoutRunning && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+            {saved.layout && !layoutRun && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
             {built?.fresh.length ? ` · ${built.fresh.length} new` : ""}
           </span>
         </div>
@@ -205,30 +229,38 @@ export default function App() {
         <div className="toolbar">
           <button
             className="button"
-            onClick={() => setLayoutRunning((r) => !r)}
+            onClick={(e) => void recompute(e.altKey)}
             title={
-              layoutRunning
+              layoutRun
                 ? "Stop now and keep the current positions"
-                : "Run the force-directed layout again from the current positions. It cools down and saves by itself in about 12 seconds; useful after changing which relationship kinds are shown."
+                : "Nudge the layout from the current positions (about 4 s, cools down and saves by itself). Alt-click to start again from scratch."
             }
           >
-            {layoutRunning ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
+            {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
-          <button className="button" onClick={resetLayout} title="Forget saved positions and compute a fresh layout">Reset layout</button>
           <button className="button" onClick={reload} title={`Parsed ${new Date(data.generatedAt).toLocaleTimeString()}`}>↻</button>
           <button className="button" onClick={theme.toggle} title="Toggle theme">{theme.dark ? "☀" : "☾"}</button>
         </div>
-        {layoutRunning && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
+        {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
 
       <Sidebar
+        data={data}
         types={data.types}
         typeColors={typeColors}
+        homeIndex={homeIndex}
+        colorMode={colorMode}
+        homeLevel={homeLevel}
+        onColorMode={(mode, level) => {
+          setColorMode(mode);
+          setHomeLevel(level);
+        }}
         edgeKinds={data.edgeKinds}
         filters={filters}
         onChange={setFilters}
-        hasSelection={!!selected}
+        selected={selected}
+        onSelect={(id) => select(id, true)}
       />
 
       <main className="stage">
@@ -237,15 +269,16 @@ export default function App() {
           graph={filteredGraph}
           hidden={hidden}
           selected={selected}
-          layoutRunning={layoutRunning}
+          layoutRunning={layoutRun !== null}
+          layoutPins={layoutPins}
+          layoutDuration={run.duration}
+          layoutStart={run.start}
           theme={theme.graph}
           onHover={(node, pos) => {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);
           }}
           onSelect={(id) => select(id)}
-          layoutPins={layoutPins}
-          layoutDuration={layoutPins ? 5000 : 12000}
           onLayoutStopped={onLayoutStopped}
           onLayoutProgress={setLayoutProgress}
           focusRequest={focusRequest}
@@ -257,6 +290,7 @@ export default function App() {
             <strong>{hoveredNode.title}</strong>
             <div className="muted small">
               {hoveredNode.status ?? "—"} · {hoveredNode.inDegree} in · {hoveredNode.outDegree} out
+              {hoveredNode.home && hoveredNode.home !== hoveredNode.id && ` · ${byId.get(hoveredNode.home)?.title ?? hoveredNode.home}`}
             </div>
             {hoveredNode.summary && <p>{hoveredNode.summary}</p>}
           </div>
@@ -264,7 +298,15 @@ export default function App() {
       </main>
 
       {selectedNode && (
-        <NotePanel data={data} graph={filteredGraph} node={selectedNode} typeColors={typeColors} onSelect={(id) => select(id, true)} onClose={() => setSelected(null)} />
+        <NotePanel
+          data={data}
+          graph={filteredGraph}
+          node={selectedNode}
+          typeColors={typeColors}
+          homeIndex={homeIndex}
+          onSelect={(id) => select(id, true)}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );
