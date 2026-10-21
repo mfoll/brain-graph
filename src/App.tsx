@@ -68,6 +68,7 @@ export default function App() {
     subtree: null,
     collapseSources: false,
     recency: false,
+    hulls: true,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState(false);
@@ -303,6 +304,7 @@ export default function App() {
           layoutDuration={run.duration}
           layoutStart={run.start}
           theme={theme.graph}
+          hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
           onHover={(node, pos) => {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);

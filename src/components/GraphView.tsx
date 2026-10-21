@@ -3,6 +3,7 @@ import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
+import { drawHulls, type HullOptions } from "../graph/hulls";
 
 export interface GraphViewProps {
   graph: BrainGraph;
@@ -16,6 +17,8 @@ export interface GraphViewProps {
   /** Initial ForceAtlas2 slowDown: ~8 from scratch, ~16 to nudge an existing map. */
   layoutStart: number;
   theme: { background: string; label: string; labelHalo: string };
+  /** Tinted group hulls behind the graph; null disables the layer. */
+  hulls: Omit<HullOptions, "dim" | "halo"> | null;
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
   onLayoutStopped: (positions: Positions) => void;
@@ -130,7 +133,7 @@ export function GraphView(props: GraphViewProps) {
         maxCameraRatio: 3,
       },
       styles: {
-        stage: { background: theme.background },
+        stage: { background: "rgba(0,0,0,0)" }, // the container paints the background so layers behind the stage show
         nodes: [
           {
             x: { attribute: "x" },
@@ -176,6 +179,20 @@ export function GraphView(props: GraphViewProps) {
       },
     });
     sigmaRef.current = sigma;
+    container.style.background = theme.background;
+    // Hull layer behind the WebGL stage, redrawn after every Sigma render.
+    const hullCanvas = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
+    const redrawHulls = () => {
+      const h = propsRef.current.hulls;
+      const ctx = hullCanvas.getContext("2d");
+      if (!h) {
+        ctx?.clearRect(0, 0, hullCanvas.width, hullCanvas.height);
+        return;
+      }
+      drawHulls(sigma as unknown as Sigma, graph, hullCanvas, { ...h, halo: propsRef.current.theme.background, dim: sigma.getGraphState().focusActive });
+    };
+    sigma.on("afterRender", redrawHulls);
+    (sigma as unknown as { __redrawHulls: () => void }).__redrawHulls = redrawHulls;
     // Keep the viewpoint when the graph is swapped (relationship filters rebuild it).
     if (cameraRef.current) sigma.getCamera().setState(cameraRef.current);
     if (import.meta.env.DEV) (window as unknown as { __sigma: unknown }).__sigma = sigma;
@@ -343,6 +360,11 @@ export function GraphView(props: GraphViewProps) {
       sigma.__highlight(props.selected);
     } else sigma.__clear();
   }, [props.selected, props.graph, props.hidden]);
+
+  // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
+  useEffect(() => {
+    (sigmaRef.current as unknown as { __redrawHulls?: () => void } | null)?.__redrawHulls?.();
+  }, [props.hulls, props.hidden, props.graph]);
 
   // Camera: centre on a requested node.
   useEffect(() => {

@@ -16,6 +16,8 @@ export interface Filters {
   collapseSources: boolean;
   /** Fade notes by time since last edit. */
   recency: boolean;
+  /** Tinted hull and name behind each home group. */
+  hulls: boolean;
 }
 
 interface Props {
@@ -216,6 +218,10 @@ export function Sidebar(p: Props) {
         <label className="row">
           <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
           Hide orphans (no visible links)
+        </label>
+        <label className="row" title="Draw a tinted region with the group's name behind each home group at the current roll-up level.">
+          <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
+          Show group hulls
         </label>
         <label className="row" title="Sources are 44% of the notes and almost all leaves. Fold them into a +N count on the note they belong to.">
           <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />
