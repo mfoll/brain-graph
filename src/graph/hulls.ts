@@ -99,7 +99,7 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     }
     octx.fill();
     if (pts.length >= 6) {
-      const x = Math.min(width - 60, Math.max(60, median(pts.map((p) => p.x))));
+      const x = median(pts.map((p) => p.x));
       const y = Math.min(height - 16, Math.max(16, median(pts.map((p) => p.y))));
       labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: pts.length });
     }
@@ -120,6 +120,8 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     const size = Math.round(12 + Math.min(12, Math.log2(l.n) * 1.6));
     fctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
     const w = fctx.measureText(l.text).width + 12;
+    // Keep the whole name inside the canvas.
+    l.x = Math.min(width - w / 2 - 4, Math.max(w / 2 + 4, l.x));
     const box = { x0: l.x - w / 2, y0: l.y - size * 0.75, x1: l.x + w / 2, y1: l.y + size * 0.75 };
     if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
     placed.push(box);
