@@ -225,3 +225,4 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .chip { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
 .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .grouping code, .grouping-toggle code { font-size: 11px; }
+.grouping-line { display: flex; align-items: baseline; justify-content: space-between; padding-right: 6px; }

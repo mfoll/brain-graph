@@ -196,7 +196,12 @@ export function GraphView(props: GraphViewProps) {
     const redrawHulls = () => {
       const h = propsRef.current.hulls;
       if (!h) return clearHulls(hullBack, hullFront);
-      drawHulls(sigma as unknown as Sigma, graph, hullBack, hullFront, { ...h, halo: propsRef.current.theme.background, dim: sigma.getGraphState().focusActive });
+      drawHulls(sigma as unknown as Sigma, graph, hullBack, hullFront, {
+        ...h,
+        halo: propsRef.current.theme.background,
+        dim: sigma.getGraphState().focusActive,
+        quiet: propsRef.current.showLabels, // note labels are on: group names step back
+      });
     };
     sigma.on("afterRender", redrawHulls);
     (sigma as unknown as { __redrawHulls: () => void }).__redrawHulls = redrawHulls;
@@ -368,14 +373,21 @@ export function GraphView(props: GraphViewProps) {
     } else sigma.__clear();
   }, [props.selected, props.graph, props.hidden]);
 
+  // Label policy. The label grid is only rebuilt on render, so refresh explicitly; while all labels
+  // are requested, let more of them through than the hover-only default allows.
   useEffect(() => {
-    sigmaRef.current?.setGraphState({ labelsAlways: props.showLabels });
+    const sigma = sigmaRef.current;
+    if (!sigma) return;
+    sigma.setGraphState({ labelsAlways: props.showLabels });
+    sigma.setSetting("labelDensity", props.showLabels ? 1.4 : 0.5);
+    sigma.setSetting("labelRenderedSizeThreshold", props.showLabels ? 3 : 7);
+    sigma.refresh();
   }, [props.showLabels, props.graph]);
 
   // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
   useEffect(() => {
     (sigmaRef.current as unknown as { __redrawHulls?: () => void } | null)?.__redrawHulls?.();
-  }, [props.hulls, props.hidden, props.graph]);
+  }, [props.hulls, props.hidden, props.graph, props.showLabels]);
 
   // Camera: centre on a requested node.
   useEffect(() => {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
 import type { ColorMode } from "../graph/build";
-import { TYPE_SHAPES, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
+import { DEFAULT_HUB_TYPES, TYPE_SHAPES, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
 
 const SHAPE_GLYPH: Record<string, string> = { diamond: "◆", square: "■", triangle: "▲", circle: "●" };
 const glyphFor = (type: string) => SHAPE_GLYPH[TYPE_SHAPES[type] ?? "circle"];
@@ -154,13 +154,28 @@ export function Sidebar(p: Props) {
             <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onColorMode("home", Number(e.target.value) as HomeLevel)} />
           </label>
         )}
-        <button className="link small grouping-toggle" onClick={() => setShowGrouping((v) => !v)}>
-          {showGrouping ? "▾" : "▸"} grouping: {[...homeSettings.hubTypes].join(", ")}
-          {homeSettings.useHas ? "" : " · belongs_to only"}
-        </button>
+        {(() => {
+          const isDefault = homeSettings.useHas && homeSettings.hubTypes.size === DEFAULT_HUB_TYPES.length && DEFAULT_HUB_TYPES.every((t) => homeSettings.hubTypes.has(t));
+          return (
+            <div className="grouping-line">
+              <button className="link small grouping-toggle" onClick={() => setShowGrouping((v) => !v)}>
+                {showGrouping ? "▾" : "▸"} grouping: {[...homeSettings.hubTypes].join(", ")}
+                {homeSettings.useHas ? "" : " · belongs_to only"}
+                {isDefault ? " (default)" : ""}
+              </button>
+              {!isDefault && (
+                <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(DEFAULT_HUB_TYPES), useHas: true })} title="Back to Project, Responsibility, Topic with the has fallback">
+                  reset
+                </button>
+              )}
+            </div>
+          );
+        })()}
         {showGrouping && (
           <div className="grouping">
-            <div className="muted small">Types that act as groups. A note joins the nearest one reached through its <code>belongs_to</code> chain.</div>
+            <div className="muted small">
+              Types that act as groups. A note joins the nearest one reached through its <code>belongs_to</code> chain. Default: Project, Responsibility, Topic.
+            </div>
             <div className="chips">
               {types
                 .filter((t) => t.name !== "Type" && t.name !== "(untyped)")

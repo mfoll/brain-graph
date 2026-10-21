@@ -92,7 +92,26 @@ export default function App() {
   }, [data, seed]);
   const graph = built?.graph ?? null;
   const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
-  const [homeSettings, setHomeSettings] = useState<HomeSettings>({ hubTypes: new Set(DEFAULT_HUB_TYPES), useHas: true });
+  const [homeSettings, setHomeSettingsState] = useState<HomeSettings>(() => {
+    try {
+      const raw = localStorage.getItem("brain-graph.grouping");
+      if (raw) {
+        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean };
+        if (Array.isArray(v.hubTypes) && v.hubTypes.length) return { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false };
+      }
+    } catch {
+      /* ignore */
+    }
+    return { hubTypes: new Set(DEFAULT_HUB_TYPES), useHas: true };
+  });
+  const setHomeSettings = (next: HomeSettings) => {
+    setHomeSettingsState(next);
+    try {
+      localStorage.setItem("brain-graph.grouping", JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas }));
+    } catch {
+      /* ignore */
+    }
+  };
   const homeIndex = useMemo(() => (data ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 

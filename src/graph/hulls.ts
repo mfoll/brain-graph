@@ -11,6 +11,7 @@ export interface HullOptions {
   /** Theme-aware colours for the label halo. */
   halo: string;
   dim: boolean; // true while a node is hovered / selected: fade the hulls
+  quiet?: boolean; // note labels are shown: draw group names smaller and lighter
 }
 
 type Pt = { x: number; y: number };
@@ -91,7 +92,7 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
       octx.arc(p.x, p.y, p.r + pad, 0, Math.PI * 2);
     }
     octx.fill();
-    if (pts.length >= 6) {
+    if (pts.length >= 4) {
       const x = median(pts.map((p) => p.x));
       const y = Math.min(height - 16, Math.max(16, median(pts.map((p) => p.y))));
       labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: pts.length });
@@ -103,14 +104,14 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   ctx.globalAlpha = 1;
 
   // Names go on the front canvas so they stay readable over nodes and edges.
-  fctx.globalAlpha = opts.dim ? 0.15 : 0.95;
+  fctx.globalAlpha = opts.dim ? 0.15 : opts.quiet ? 0.45 : 0.95;
   fctx.textAlign = "center";
   fctx.textBaseline = "middle";
   fctx.lineJoin = "round";
   // Largest groups are placed first; a name whose box would overlap an already placed one is skipped.
   const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const l of labels.sort((a, b) => b.n - a.n)) {
-    const size = Math.round(12 + Math.min(12, Math.log2(l.n) * 1.6));
+    const size = Math.round((opts.quiet ? 10 : 12) + Math.min(opts.quiet ? 8 : 12, Math.log2(l.n) * (opts.quiet ? 1.1 : 1.6)));
     fctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
     const w = fctx.measureText(l.text).width + 12;
     // Keep the whole name inside the canvas.
