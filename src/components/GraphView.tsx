@@ -3,7 +3,7 @@ import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
-import { drawHulls, type HullOptions } from "../graph/hulls";
+import { clearHulls, drawHulls, type HullOptions } from "../graph/hulls";
 
 export interface GraphViewProps {
   graph: BrainGraph;
@@ -19,6 +19,8 @@ export interface GraphViewProps {
   theme: { background: string; label: string; labelHalo: string };
   /** Tinted group hulls behind the graph; null disables the layer. */
   hulls: Omit<HullOptions, "dim" | "halo"> | null;
+  /** Show note labels for all nodes (density-managed); otherwise only on hover / selection. */
+  showLabels: boolean;
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
   onLayoutStopped: (positions: Positions) => void;
@@ -28,7 +30,7 @@ export interface GraphViewProps {
   fitRequest: number;
 }
 
-type GS = { focusActive: boolean };
+type GS = { focusActive: boolean; labelsAlways: boolean };
 
 // ForceAtlas2 never "finishes": nodes keep jittering around their equilibrium, and its adaptive
 // global speed defeats any damping applied to the positions it returns. So instead of the worker
@@ -119,7 +121,7 @@ export function GraphView(props: GraphViewProps) {
     const { graph, theme } = propsRef.current;
 
     const sigma = new Sigma<NodeAttrs, EdgeAttrs, Record<string, unknown>, NS, {}, GS>(graph, container, {
-      customGraphState: { focusActive: false },
+      customGraphState: { focusActive: false, labelsAlways: propsRef.current.showLabels },
       customNodeState: { isSelected: false },
       settings: {
         allowInvalidContainer: true, // the pane may be hidden (0x0) on first mount; we resize below
@@ -146,7 +148,11 @@ export function GraphView(props: GraphViewProps) {
             labelColor: theme.label,
             labelSize: 12,
             labelFont: "Inter, system-ui, sans-serif",
-            labelVisibility: { whenState: "isHovered", then: "visible", else: "auto" },
+            labelVisibility: {
+              whenState: "isHovered",
+              then: "visible",
+              else: { when: (_a, _s, gs) => gs.labelsAlways, then: "auto", else: "hidden" },
+            },
             depth: { whenState: "isHovered", then: "topNodes", else: "nodes" },
             backdropVisibility: { whenState: "isHovered", then: "visible", else: "hidden" },
             backdropColor: theme.labelHalo,
@@ -161,6 +167,7 @@ export function GraphView(props: GraphViewProps) {
             then: { opacity: 0.08, labelVisibility: "hidden" },
           },
           { whenState: "isHighlighted", then: { labelVisibility: "auto", depth: "topNodes" } },
+          { when: (_a, s, gs) => gs.labelsAlways && gs.focusActive && !s.isHighlighted && !s.isHovered, then: { labelVisibility: "hidden" } },
           { whenState: "isSelected", then: { labelVisibility: "visible", size: (a) => a.size * 1.5, depth: "topNodes", backdropVisibility: "visible" } },
           { whenState: "isHidden", then: { visibility: "hidden" } },
         ],
@@ -181,15 +188,12 @@ export function GraphView(props: GraphViewProps) {
     sigmaRef.current = sigma;
     container.style.background = theme.background;
     // Hull layer behind the WebGL stage, redrawn after every Sigma render.
-    const hullCanvas = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
+    const hullBack = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
+    const hullFront = sigma.createCanvas("hull-labels", { afterLayer: "stage", style: { pointerEvents: "none" } });
     const redrawHulls = () => {
       const h = propsRef.current.hulls;
-      const ctx = hullCanvas.getContext("2d");
-      if (!h) {
-        ctx?.clearRect(0, 0, hullCanvas.width, hullCanvas.height);
-        return;
-      }
-      drawHulls(sigma as unknown as Sigma, graph, hullCanvas, { ...h, halo: propsRef.current.theme.background, dim: sigma.getGraphState().focusActive });
+      if (!h) return clearHulls(hullBack, hullFront);
+      drawHulls(sigma as unknown as Sigma, graph, hullBack, hullFront, { ...h, halo: propsRef.current.theme.background, dim: sigma.getGraphState().focusActive });
     };
     sigma.on("afterRender", redrawHulls);
     (sigma as unknown as { __redrawHulls: () => void }).__redrawHulls = redrawHulls;
@@ -361,6 +365,10 @@ export function GraphView(props: GraphViewProps) {
     } else sigma.__clear();
   }, [props.selected, props.graph, props.hidden]);
 
+  useEffect(() => {
+    sigmaRef.current?.setGraphState({ labelsAlways: props.showLabels });
+  }, [props.showLabels, props.graph]);
+
   // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
   useEffect(() => {
     (sigmaRef.current as unknown as { __redrawHulls?: () => void } | null)?.__redrawHulls?.();
@@ -373,10 +381,15 @@ export function GraphView(props: GraphViewProps) {
     handledFocus.current = props.focusRequest.nonce;
     const { node } = props.focusRequest;
     if (!props.graph.hasNode(node)) return;
-    // Convert from graph space with the current normalisation: display data can lag a frame behind.
+    // Keep the zoom as it is (like clicking on the graph); only pan when the node is off-screen.
     const a = props.graph.getNodeAttributes(node);
+    const v = sigma.graphToViewport({ x: a.x, y: a.y });
+    const { width, height } = sigma.getDimensions();
+    const margin = 40;
+    const visible = v.x > margin && v.x < width - margin && v.y > margin && v.y < height - margin;
+    if (visible) return;
     const p = sigma.graphToFramedGraph({ x: a.x, y: a.y });
-    void sigma.getCamera().animate({ x: p.x, y: p.y, ratio: 0.22 }, { duration: 450 });
+    void sigma.getCamera().animate({ x: p.x, y: p.y }, { duration: 400 });
   }, [props.focusRequest]);
 
   useEffect(() => {

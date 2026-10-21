@@ -34,18 +34,14 @@ const LAYOUT_RUNS = {
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
-const SIDEBAR_KEY = "brain-graph.sidebarWidth";
-const SIDEBAR_MIN = 180;
-const SIDEBAR_MAX = 640;
-
-/** Draggable sidebar width, remembered per browser. */
-function useSidebarWidth() {
+/** Draggable panel width, remembered per browser. `side` is where the panel sits: dragging the handle away from it widens it. */
+function usePanelWidth(key: string, initial: number, side: "left" | "right", min = 180, max = 720) {
   const [width, setWidth] = useState(() => {
     try {
-      const v = Number(localStorage.getItem(SIDEBAR_KEY));
-      return v >= SIDEBAR_MIN && v <= SIDEBAR_MAX ? v : 260;
+      const v = Number(localStorage.getItem(key));
+      return v >= min && v <= max ? v : initial;
     } catch {
-      return 260;
+      return initial;
     }
   });
   const [dragging, setDragging] = useState(false);
@@ -53,15 +49,16 @@ function useSidebarWidth() {
     e.preventDefault();
     const startX = e.clientX;
     const startW = width;
+    const sign = side === "left" ? 1 : -1;
     setDragging(true);
-    const move = (ev: MouseEvent) => setWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + ev.clientX - startX)));
+    const move = (ev: MouseEvent) => setWidth(Math.min(max, Math.max(min, startW + sign * (ev.clientX - startX))));
     const up = () => {
       setDragging(false);
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
       setWidth((w) => {
         try {
-          localStorage.setItem(SIDEBAR_KEY, String(w));
+          localStorage.setItem(key, String(w));
         } catch {
           /* private mode: ignore */
         }
@@ -76,7 +73,8 @@ function useSidebarWidth() {
 
 export default function App() {
   const { data, error, reload } = useVault();
-  const sidebar = useSidebarWidth();
+  const sidebar = usePanelWidth("brain-graph.sidebarWidth", 260, "left");
+  const panel = usePanelWidth("brain-graph.panelWidth", 420, "right", 280, 900);
   const saved = useSavedLayout();
   const theme = useTheme();
 
@@ -110,6 +108,7 @@ export default function App() {
     collapseSources: false,
     recency: false,
     hulls: true,
+    labels: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState(false);
@@ -254,7 +253,10 @@ export default function App() {
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
 
   return (
-    <div className={`app${sidebar.dragging ? " resizing" : ""}`} style={{ "--sidebar-w": `${sidebar.width}px` } as React.CSSProperties}>
+    <div
+      className={`app${sidebar.dragging || panel.dragging ? " resizing" : ""}${selectedNode ? " with-panel" : ""}`}
+      style={{ "--sidebar-w": `${sidebar.width}px`, "--panel-w": `${panel.width}px` } as React.CSSProperties}
+    >
       <header className="topbar">
         <div className="brand">
           <strong>{data.vault.label}</strong>
@@ -348,6 +350,7 @@ export default function App() {
           layoutStart={run.start}
           theme={theme.graph}
           hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
+          showLabels={filters.labels}
           onHover={(node, pos) => {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);
@@ -371,6 +374,7 @@ export default function App() {
         )}
       </main>
 
+      {selectedNode && <div className={`gutter gutter-right${panel.dragging ? " active" : ""}`} onMouseDown={panel.startDrag} title="Drag to resize the panel" />}
       {selectedNode && (
         <NotePanel
           data={data}

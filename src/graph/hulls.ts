@@ -35,11 +35,9 @@ function median(values: number[]): number {
  * drawn opaque on an offscreen canvas and composited once with a low alpha, so overlaps never
  * stack up darker.
  */
-export function drawHulls(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasElement, opts: HullOptions): void {
+function fit(canvas: HTMLCanvasElement, width: number, height: number, dpr: number): CanvasRenderingContext2D | null {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const { width, height } = sigma.getDimensions();
-  const dpr = window.devicePixelRatio || 1;
+  if (!ctx) return null;
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
@@ -48,6 +46,20 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasEle
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
+  return ctx;
+}
+
+export function clearHulls(back: HTMLCanvasElement, front: HTMLCanvasElement): void {
+  for (const c of [back, front]) c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+}
+
+/** `back` sits behind the WebGL stage (tinted regions); `front` sits above it (group names). */
+export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasElement, front: HTMLCanvasElement, opts: HullOptions): void {
+  const { width, height } = sigma.getDimensions();
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = fit(back, width, height, dpr);
+  const fctx = fit(front, width, height, dpr);
+  if (!ctx || !fctx) return;
 
   // Group visible nodes by their anchor hub at this level.
   const groups = new Map<string, (Pt & { r: number })[]>();
@@ -67,8 +79,8 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasEle
   const pad = 16;
   const off = (drawHulls as unknown as { _off?: HTMLCanvasElement })._off ?? document.createElement("canvas");
   (drawHulls as unknown as { _off?: HTMLCanvasElement })._off = off;
-  off.width = canvas.width;
-  off.height = canvas.height;
+  off.width = back.width;
+  off.height = back.height;
   const octx = off.getContext("2d")!;
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
   octx.clearRect(0, 0, width, height);
@@ -95,18 +107,27 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasEle
 
   ctx.globalAlpha = opts.dim ? 0.05 : 0.16;
   ctx.drawImage(off, 0, 0, width, height);
-  ctx.globalAlpha = opts.dim ? 0.2 : 0.9;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.lineJoin = "round";
-  for (const l of labels.sort((a, b) => b.n - a.n)) {
-    const size = Math.round(11 + Math.min(10, Math.log2(l.n) * 1.4));
-    ctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = opts.halo;
-    ctx.strokeText(l.text, l.x, l.y);
-    ctx.fillStyle = l.color;
-    ctx.fillText(l.text, l.x, l.y);
-  }
   ctx.globalAlpha = 1;
+
+  // Names go on the front canvas so they stay readable over nodes and edges.
+  fctx.globalAlpha = opts.dim ? 0.15 : 0.95;
+  fctx.textAlign = "center";
+  fctx.textBaseline = "middle";
+  fctx.lineJoin = "round";
+  // Largest groups are placed first; a name whose box would overlap an already placed one is skipped.
+  const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (const l of labels.sort((a, b) => b.n - a.n)) {
+    const size = Math.round(12 + Math.min(12, Math.log2(l.n) * 1.6));
+    fctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
+    const w = fctx.measureText(l.text).width + 12;
+    const box = { x0: l.x - w / 2, y0: l.y - size * 0.75, x1: l.x + w / 2, y1: l.y + size * 0.75 };
+    if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+    placed.push(box);
+    fctx.lineWidth = Math.max(4, size / 3);
+    fctx.strokeStyle = opts.halo;
+    fctx.strokeText(l.text, l.x, l.y);
+    fctx.fillStyle = l.color;
+    fctx.fillText(l.text, l.x, l.y);
+  }
+  fctx.globalAlpha = 1;
 }

@@ -2,7 +2,10 @@ import { useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
 import type { ColorMode } from "../graph/build";
-import type { HomeIndex, HomeLevel, Hub } from "../graph/home";
+import { TYPE_SHAPES, type HomeIndex, type HomeLevel, type Hub } from "../graph/home";
+
+const SHAPE_GLYPH: Record<string, string> = { diamond: "◆", square: "■", triangle: "▲", circle: "●" };
+const glyphFor = (type: string) => SHAPE_GLYPH[TYPE_SHAPES[type] ?? "circle"];
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -18,6 +21,8 @@ export interface Filters {
   recency: boolean;
   /** Tinted hull and name behind each home group. */
   hulls: boolean;
+  /** Show every note's label (density-managed) instead of only hovered / selected ones. */
+  labels: boolean;
 }
 
 interface Props {
@@ -82,7 +87,11 @@ export function Sidebar(p: Props) {
             {hub.children.length ? (open ? "▾" : "▸") : ""}
           </button>
           <button className="tree-label" onClick={(e) => (e.altKey ? isolate(id) : onSelect(id))} title={`${hub.type} · ${hub.subtreeCount} notes in subtree · Alt-click to isolate`}>
-            <span className="swatch" style={{ background: homeIndex.palettes[homeLevel].get(id), borderRadius: hub.type === "Project" ? 2 : "50%" }} />
+            {colorMode === "home" ? (
+              <span className="swatch" style={{ background: homeIndex.palettes[homeLevel].get(id), borderRadius: hub.type === "Project" ? 2 : "50%" }} />
+            ) : (
+              <span className="glyph muted">{glyphFor(hub.type)}</span>
+            )}
             <span className="name">{hub.title}</span>
             <span className="count">{hub.subtreeCount}</span>
           </button>
@@ -97,45 +106,45 @@ export function Sidebar(p: Props) {
 
   return (
     <aside className="sidebar">
-      <section>
+      <section className={colorMode === "home" ? "colour-source" : ""}>
         <header>
-          <h2>Colour by</h2>
+          <h2>Home</h2>
+          <span className="header-tools">
+            {filters.subtree && (
+              <button className="link small" onClick={() => onChange({ ...filters, subtree: null })}>
+                show all
+              </button>
+            )}
+            <button className={`pill-toggle${colorMode === "home" ? " on" : ""}`} onClick={() => p.onColorMode("home", homeLevel)} title="Colour the graph by home group">
+              {colorMode === "home" ? "● colouring" : "colour by this"}
+            </button>
+          </span>
         </header>
-        <div className="segmented">
-          <button className={colorMode === "home" ? "on" : ""} onClick={() => p.onColorMode("home", homeLevel)}>Home</button>
-          <button className={colorMode === "type" ? "on" : ""} onClick={() => p.onColorMode("type", homeLevel)}>Type</button>
-        </div>
         {colorMode === "home" && (
           <label className="row column">
             <span>
               Roll up to: <strong>{LEVEL_LABELS[homeLevel]}</strong>
             </span>
             <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onColorMode("home", Number(e.target.value) as HomeLevel)} />
-            <span className="muted small">Shapes: ◆ project · ■ responsibility/topic · ▲ question · ● other</span>
           </label>
         )}
-      </section>
-
-      <section>
-        <header>
-          <h2>Home</h2>
-          {filters.subtree && (
-            <button className="link small" onClick={() => onChange({ ...filters, subtree: null })}>
-              show all
-            </button>
-          )}
-        </header>
         <ul className="tree">{homeIndex.roots.map(renderHub)}</ul>
       </section>
 
-      <section>
+      <section className={colorMode === "type" ? "colour-source" : ""}>
         <header>
           <h2>Types</h2>
-          <span className="muted small">
-            <button className="link" onClick={() => setAll("types", true)}>all</button> ·{" "}
-            <button className="link" onClick={() => setAll("types", false)}>none</button>
+          <span className="header-tools">
+            <span className="muted small">
+              <button className="link" onClick={() => setAll("types", true)}>all</button> ·{" "}
+              <button className="link" onClick={() => setAll("types", false)}>none</button>
+            </span>
+            <button className={`pill-toggle${colorMode === "type" ? " on" : ""}`} onClick={() => p.onColorMode("type", homeLevel)} title="Colour the graph by note type">
+              {colorMode === "type" ? "● colouring" : "colour by this"}
+            </button>
           </span>
         </header>
+        {colorMode === "home" && <div className="muted small hint">Shapes while colouring by home: ◆ project · ■ responsibility/topic · ▲ question · ● other</div>}
         <ul className="legend">
           {types.map((t) => {
             const on = filters.types.has(t.name);
@@ -149,7 +158,7 @@ export function Sidebar(p: Props) {
                     {open ? "▾" : "▸"}
                   </button>
                   <button className="tree-label" onClick={(e) => toggle("types", t.name, e.altKey)} title="Click to show/hide, Alt-click to isolate this type">
-                    <span className="swatch" style={{ background: typeColors.get(t.name) }} />
+                    {colorMode === "type" ? <span className="swatch" style={{ background: typeColors.get(t.name) }} /> : <span className="glyph muted">{glyphFor(t.name)}</span>}
                     <span className="name">{t.name}</span>
                     <span className="count">{t.count}</span>
                   </button>
@@ -218,6 +227,10 @@ export function Sidebar(p: Props) {
         <label className="row">
           <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
           Hide orphans (no visible links)
+        </label>
+        <label className="row" title="Labels are otherwise shown only for hovered or selected notes and their neighbours.">
+          <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
+          Show all note labels
         </label>
         <label className="row" title="Draw a tinted region with the group's name behind each home group at the current roll-up level.">
           <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
