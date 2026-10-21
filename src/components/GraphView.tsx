@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import FA2Layout from "graphology-layout-forceatlas2/worker";
-import type { BrainGraph, EdgeAttrs, NodeAttrs } from "../graph/build";
+import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 
 export interface GraphViewProps {
@@ -10,10 +10,14 @@ export interface GraphViewProps {
   hidden: Set<string>; // node ids hidden by filters
   selected: string | null;
   layoutRunning: boolean;
+  /** Nodes to keep fixed while the layout runs (settling only the new notes). */
+  layoutPins: Set<string> | null;
+  /** Milliseconds before the layout stops by itself. */
+  layoutDuration: number;
   theme: { background: string; label: string; labelHalo: string };
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
-  onLayoutStopped: () => void;
+  onLayoutStopped: (positions: Positions) => void;
   focusRequest: { node: string; nonce: number } | null;
   fitRequest: number;
 }
@@ -30,6 +34,9 @@ export function GraphView(props: GraphViewProps) {
   const propsRef = useRef(props);
   propsRef.current = props;
   const selectedRef = useRef<string | null>(null);
+  const cameraRef = useRef<{ x: number; y: number; ratio: number; angle: number } | null>(null);
+  const handledFocus = useRef<number>(0);
+  const handledFit = useRef<number>(0);
 
   // Create the renderer once per graph instance.
   useEffect(() => {
@@ -96,6 +103,8 @@ export function GraphView(props: GraphViewProps) {
       },
     });
     sigmaRef.current = sigma;
+    // Keep the viewpoint when the graph is swapped (relationship filters rebuild it).
+    if (cameraRef.current) sigma.getCamera().setState(cameraRef.current);
     if (import.meta.env.DEV) (window as unknown as { __sigma: unknown }).__sigma = sigma;
 
     const clearHighlight = () => {
@@ -153,7 +162,8 @@ export function GraphView(props: GraphViewProps) {
         gravity: 1,
         scalingRatio: 10,
         strongGravityMode: true,
-        slowDown: 5,
+        slowDown: 12, // higher = less jitter; the run is time-boxed anyway
+        barnesHutTheta: 0.6,
         barnesHutOptimize: true,
         adjustSizes: false,
         edgeWeightInfluence: 0.5,
@@ -190,6 +200,7 @@ export function GraphView(props: GraphViewProps) {
     return () => {
       container.removeEventListener("mousemove", onMove);
       ro.disconnect();
+      cameraRef.current = sigma.getCamera().getState();
       layout.kill();
       sigma.kill();
       sigmaRef.current = null;
@@ -202,20 +213,27 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
+    const { graph, layoutPins } = props;
+    const stop = () => {
+      layout.stop();
+      if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
+      fit();
+      propsRef.current.onLayoutStopped(collectPositions(graph));
+    };
     if (props.layoutRunning) {
-      if (!layout.isRunning()) layout.start();
+      if (!layout.isRunning()) {
+        // FA2 reads node attributes when it starts, so pin before starting.
+        if (layoutPins) graph.forEachNode((n) => graph.setNodeAttribute(n, "fixed", layoutPins.has(n)));
+        layout.start();
+      }
       const tick = setInterval(fit, 700);
-      const t = setTimeout(() => {
-        layout.stop();
-        fit();
-        propsRef.current.onLayoutStopped();
-      }, 12000);
+      const t = setTimeout(stop, props.layoutDuration);
       return () => {
         clearInterval(tick);
         clearTimeout(t);
+        if (layout.isRunning()) stop();
       };
     }
-    if (layout.isRunning()) layout.stop();
     fit();
   }, [props.layoutRunning, props.graph]);
 
@@ -255,7 +273,8 @@ export function GraphView(props: GraphViewProps) {
   // Camera: centre on a requested node.
   useEffect(() => {
     const sigma = sigmaRef.current;
-    if (!sigma || !props.focusRequest) return;
+    if (!sigma || !props.focusRequest || props.focusRequest.nonce === handledFocus.current) return;
+    handledFocus.current = props.focusRequest.nonce;
     const { node } = props.focusRequest;
     if (!props.graph.hasNode(node)) return;
     // Convert from graph space with the current normalisation: display data can lag a frame behind.
@@ -266,7 +285,8 @@ export function GraphView(props: GraphViewProps) {
 
   useEffect(() => {
     const sigma = sigmaRef.current;
-    if (!sigma || !props.fitRequest) return;
+    if (!sigma || !props.fitRequest || props.fitRequest === handledFit.current) return;
+    handledFit.current = props.fitRequest;
     (sigma as unknown as Helpers).__fit();
     void sigma.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1, angle: 0 }, { duration: 450 });
   }, [props.fitRequest]);

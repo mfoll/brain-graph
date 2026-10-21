@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { buildGraph, neighborhood, typeColorMap } from "./graph/build";
-import { useVault } from "./useVault";
+import { buildGraph, neighborhood, typeColorMap, type Positions } from "./graph/build";
+import { useSavedLayout, useVault } from "./useVault";
 
 function useTheme() {
   const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -27,8 +27,22 @@ function useTheme() {
 
 export default function App() {
   const { data, error, reload } = useVault();
+  const saved = useSavedLayout();
   const theme = useTheme();
-  const graph = useMemo(() => (data ? buildGraph(data) : null), [data]);
+
+  // Positions used to seed the graph: the saved layout on first load, nothing after a reset.
+  // Later layout runs update `latestPositions` (a ref, so saving never rebuilds the graph).
+  const [seed, setSeed] = useState<{ positions: Positions | null; nonce: number } | undefined>(undefined);
+  useEffect(() => {
+    if (saved.layout !== undefined && seed === undefined) setSeed({ positions: saved.layout?.positions ?? null, nonce: 0 });
+  }, [saved.layout, seed]);
+  const latestPositions = useRef<Positions | null>(null);
+
+  const built = useMemo(() => {
+    if (!data || seed === undefined) return null;
+    return buildGraph(data, latestPositions.current ?? seed.positions);
+  }, [data, seed]);
+  const graph = built?.graph ?? null;
   const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 
@@ -54,7 +68,29 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
-  const [layoutRunning, setLayoutRunning] = useState(true);
+  const [layoutRunning, setLayoutRunning] = useState(false);
+  // A restored map needs no layout; new notes get a short settling run with everything else pinned.
+  const layoutPins = useMemo(() => {
+    if (!built || !built.restored || built.fresh.length === 0) return null;
+    const fresh = new Set(built.fresh);
+    return new Set(built.graph.nodes().filter((n) => !fresh.has(n)));
+  }, [built]);
+  useEffect(() => {
+    if (!built) return;
+    if (!built.restored || built.fresh.length > 0) setLayoutRunning(true);
+  }, [built]);
+  const onLayoutStopped = (positions: Positions) => {
+    latestPositions.current = positions;
+    if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
+    setLayoutRunning(false);
+    void saved.save(positions);
+  };
+  const resetLayout = async () => {
+    setLayoutRunning(false);
+    await saved.reset();
+    latestPositions.current = null;
+    setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1 }));
+  };
   const [focusRequest, setFocusRequest] = useState<{ node: string; nonce: number } | null>(null);
   const [fitRequest, setFitRequest] = useState(0);
   const [query, setQuery] = useState("");
@@ -127,6 +163,8 @@ export default function App() {
           <strong>{data.vault.label}</strong>
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
+            {saved.layout && !layoutRunning && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+            {built?.fresh.length ? ` · ${built.fresh.length} new` : ""}
           </span>
         </div>
         <div className="search">
@@ -167,6 +205,7 @@ export default function App() {
             {layoutRunning ? "⏸ Pause layout" : "▶ Run layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
+          <button className="button" onClick={resetLayout} title="Forget saved positions and compute a fresh layout">Reset layout</button>
           <button className="button" onClick={reload} title={`Parsed ${new Date(data.generatedAt).toLocaleTimeString()}`}>↻</button>
           <button className="button" onClick={theme.toggle} title="Toggle theme">{theme.dark ? "☀" : "☾"}</button>
         </div>
@@ -194,7 +233,9 @@ export default function App() {
             if (pos) setPointer(pos);
           }}
           onSelect={(id) => select(id)}
-          onLayoutStopped={() => setLayoutRunning(false)}
+          layoutPins={layoutPins}
+          layoutDuration={layoutPins ? 5000 : 12000}
+          onLayoutStopped={onLayoutStopped}
           focusRequest={focusRequest}
           fitRequest={fitRequest}
         />

@@ -13,6 +13,7 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 - Sidebar: toggle types and relationship kinds (Alt-click isolates one), hide archived notes, hide orphans, and a focus-depth slider that keeps only the selected note's neighbourhood.
 - Search box with Enter to jump; ForceAtlas2 layout runs in a web worker and settles after a few seconds (pause/run button).
 - Live reload: the dev server watches the vault and re-parses on change.
+- Stable map: node positions are saved to `.tmp/layouts/<vault-slug>.json` when a layout run stops (or you pause it). The next start restores them without running the layout; only new notes get a short settling run, placed next to their linked notes while everything else stays pinned. **Reset layout** forgets the saved positions.
 
 ## Run
 
@@ -38,4 +39,4 @@ pnpm graph:dump ~/Second-Brain -- --summary   # parser statistics and unresolved
 
 ## Status
 
-Prototype (October 2026). Known gaps: positions are recomputed on every load; no multi-vault mode; the Tolaria deep-link slug is inferred, not read from Tolaria's registry.
+Prototype (October 2026). Known gaps: no multi-vault mode; the Tolaria deep-link slug is inferred from the vault label (verified for the work vault), not read from Tolaria's registry.
