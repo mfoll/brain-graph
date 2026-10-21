@@ -90,6 +90,7 @@ export default function App() {
     await saved.reset();
     latestPositions.current = null;
     setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1 }));
+    setFitRequest((n) => n + 1);
   };
   const [focusRequest, setFocusRequest] = useState<{ node: string; nonce: number } | null>(null);
   const [fitRequest, setFitRequest] = useState(0);
