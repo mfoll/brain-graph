@@ -74,6 +74,44 @@ export function vaultPlugin(opts: VaultPluginOptions): Plugin {
           res.end(JSON.stringify({ error: String(err) }));
         }
       });
+      // Raw Markdown of one note: /api/note?id=<vault-relative id without .md>
+      server.middlewares.use("/api/note", async (req, res) => {
+        try {
+          const url = new URL(req.url ?? "", "http://localhost");
+          const id = url.searchParams.get("id") ?? "";
+          const file = path.resolve(vaultPath, `${id}.md`);
+          // Stay inside the vault and only serve Markdown files.
+          if (!id || id.includes("..") || !file.startsWith(vaultPath + path.sep) || !file.endsWith(".md")) {
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ error: "bad id" }));
+          }
+          const [text, stat] = await Promise.all([fs.readFile(file, "utf8"), fs.stat(file)]);
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ id, markdown: text, modified: stat.mtime.toISOString() }));
+        } catch (err) {
+          res.statusCode = (err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500;
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+      // Vault-owned assets referenced from notes (images in attachments/ etc.).
+      server.middlewares.use("/vault-file", async (req, res) => {
+        try {
+          const rel = decodeURIComponent((req.url ?? "").split("?")[0]).replace(/^\/+/, "");
+          const file = path.resolve(vaultPath, rel);
+          if (!rel || rel.includes("..") || !file.startsWith(vaultPath + path.sep) || /\.md$/i.test(file)) {
+            res.statusCode = 400;
+            return res.end();
+          }
+          const ext = path.extname(file).toLowerCase();
+          const types: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp", ".pdf": "application/pdf" };
+          res.setHeader("Content-Type", types[ext] ?? "application/octet-stream");
+          res.end(await fs.readFile(file));
+        } catch {
+          res.statusCode = 404;
+          res.end();
+        }
+      });
+
       // Saved layout positions: GET returns {savedAt, positions} or 404; PUT stores; DELETE removes.
       server.middlewares.use("/api/layout", async (req, res) => {
         try {

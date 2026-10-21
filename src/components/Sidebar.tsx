@@ -12,6 +12,10 @@ export interface Filters {
   focusDepth: number; // 0 = whole graph
   /** Isolate the notes under this hub (project / responsibility / topic). */
   subtree: string | null;
+  /** Hide Source notes and show their count on the parent note's label. */
+  collapseSources: boolean;
+  /** Fade notes by time since last edit. */
+  recency: boolean;
 }
 
 interface Props {
@@ -212,6 +216,14 @@ export function Sidebar(p: Props) {
         <label className="row">
           <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
           Hide orphans (no visible links)
+        </label>
+        <label className="row" title="Sources are 44% of the notes and almost all leaves. Fold them into a +N count on the note they belong to.">
+          <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />
+          Collapse Sources into their parent
+        </label>
+        <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
+          <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
+          Fade notes not edited recently
         </label>
         <label className="row column">
           <span>

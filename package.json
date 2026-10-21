@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "chokidar": "^6.0.0",
+    "dompurify": "^3.4.17",
     "graphology": "^0.26.0",
     "graphology-layout": "^0.6.1",
     "graphology-layout-forceatlas2": "^0.10.1",
     "graphology-types": "^0.24.8",
+    "marked": "^18.1.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "sigma": "^4.0.3",

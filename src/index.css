@@ -72,6 +72,7 @@ button { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 6px; margin-left: auto; }
 
 .sidebar {
+  overflow-x: hidden;
   grid-area: side;
   overflow: auto;
   border-right: 1px solid var(--border);
@@ -113,7 +114,7 @@ button { font: inherit; color: inherit; }
 
 .note-panel {
   grid-area: note;
-  width: 360px;
+  width: 420px;
   overflow: auto;
   border-left: 1px solid var(--border);
   background: var(--panel);
@@ -167,3 +168,33 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .iso.on { color: var(--accent); }
 .legend > li > .tree-line .tree-label { padding: 4px 6px; }
 .crumbs { font-size: 12px; margin: -4px 0 8px; }
+
+/* Note reader */
+.panel-tabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); }
+.panel-tabs button { border: 0; background: none; padding: 6px 10px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.panel-tabs button.on { color: var(--fg); border-bottom-color: var(--accent); }
+.reader .yaml pre { font-size: 11px; }
+.markdown { font-size: 13.5px; line-height: 1.55; }
+.markdown h1 { font-size: 18px; margin: 4px 0 10px; }
+.markdown h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 6px; }
+.markdown h3 { font-size: 13.5px; margin: 14px 0 4px; }
+.markdown p, .markdown ul, .markdown ol { margin: 6px 0; }
+.markdown li { margin: 2px 0; }
+.markdown code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
+.markdown pre { background: var(--panel-2); padding: 8px; border-radius: 6px; overflow: auto; font-size: 11.5px; }
+.markdown pre code { background: none; padding: 0; }
+.markdown table { border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.markdown th, .markdown td { border: 1px solid var(--border); padding: 3px 6px; text-align: left; vertical-align: top; }
+.markdown img { max-width: 100%; border-radius: 6px; }
+.markdown blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.markdown a { color: var(--accent); text-decoration: none; }
+.markdown a:hover { text-decoration: underline; }
+.markdown .wikilink { border-bottom: 1px dotted var(--accent); }
+.markdown .wikilink.missing { color: var(--muted); border-bottom: 1px dotted var(--muted); }
+.markdown input[type="checkbox"] { margin-right: 6px; }
+.callout { margin: 8px 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--panel-2); font-size: 13px; }
+.callout-type { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+.callout-warning, .callout-danger, .callout-failure, .callout-bug { border-left-color: #ef4444; }
+.callout-tip, .callout-success { border-left-color: #22c55e; }
+.callout-question, .callout-todo { border-left-color: #eab308; }
+.callout-example, .callout-abstract { border-left-color: #8b5cf6; }

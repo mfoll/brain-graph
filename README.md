@@ -6,7 +6,10 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 
 ## What it shows
 
-- One node per Markdown note. Colour comes from the vault's own `Type` notes (`_color` / `color`), so the legend matches Tolaria's sidebar. Size grows with the number of links.
+- One node per Markdown note, sized by number of links. **Colour by home** (default): every note rolls up through `belongs_to` (and inverse `has`) to its nearest Project, or failing that its Responsibility or Topic; a slider chooses the roll-up level (area, project, subproject), and node shape then encodes the type (◆ project, ■ responsibility/topic, ▲ question). **Colour by type** uses the vault's own `Type` note colours so the legend matches Tolaria's sidebar.
+- The sidebar shows the hub hierarchy (Topics and Responsibilities → Projects → subprojects) with note counts; click a hub to centre on it, ◎ or Alt-click to isolate its subtree. Each Type row expands to its notes.
+- Reading: the detail panel renders the note's Markdown (callouts, tables, images from the vault) with wikilinks that navigate the graph, next to a Links tab grouping relationships by kind.
+- Toggles: hide archived, hide orphans, collapse Sources into a `+N` count on their parent, fade notes by time since last edit (7 / 30 / 90 days).
 - One edge per relationship. Every frontmatter key whose value contains wikilinks is a relationship (the Tolaria rule): `belongs_to`, `has`, `related_to`, `surface_for` and custom keys such as `source_note` or `wraps`. Body wikilinks are a separate, thinner `body` kind, hidden by default.
 - Hover: tooltip with type, status, link counts and the note's first paragraph; neighbours stay lit, the rest fades.
 - Click: detail panel with summary, outgoing and incoming relationships grouped by kind, frontmatter, **Open in Tolaria** (`tolaria://<vault-slug>/<path>.md`) and copy-wikilink.

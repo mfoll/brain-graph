@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { NoteNode, VaultGraph } from "../types";
+import { NoteReader } from "./NoteReader";
 import type { BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { homeChain, type HomeIndex } from "../graph/home";
@@ -19,6 +21,7 @@ export function deepLink(data: VaultGraph, id: string): string {
 
 export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose }: Props) {
   const chain = homeChain(node, homeIndex.hubs).filter((id) => id !== node.id).reverse(); // root first
+  const [tab, setTab] = useState<"note" | "links">("note");
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const out = new Map<string, string[]>();
   const inc = new Map<string, string[]>();
@@ -82,18 +85,23 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
           {node.homeAlternatives.length > 0 && <span className="muted small"> (+{node.homeAlternatives.length} other home)</span>}
         </div>
       )}
-      {node.summary && <p className="summary">{node.summary}</p>}
       <div className="actions">
         <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>
         <button className="button" onClick={() => navigator.clipboard?.writeText(`[[${node.folder ? node.id : node.stem}]]`)}>Copy wikilink</button>
       </div>
-      {renderGroup("Outgoing", out)}
-      {renderGroup("Incoming", inc)}
-      {Object.keys(node.properties).length > 0 && (
-        <details>
-          <summary>Frontmatter</summary>
-          <pre>{JSON.stringify(node.properties, null, 2)}</pre>
-        </details>
+      <div className="panel-tabs">
+        <button className={tab === "note" ? "on" : ""} onClick={() => setTab("note")}>Note</button>
+        <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
+          Links <span className="count">{node.inDegree + node.outDegree}</span>
+        </button>
+      </div>
+      {tab === "note" ? (
+        <NoteReader data={data} id={node.id} onNavigate={onSelect} />
+      ) : (
+        <>
+          {renderGroup("Outgoing", out)}
+          {renderGroup("Incoming", inc)}
+        </>
       )}
     </aside>
   );

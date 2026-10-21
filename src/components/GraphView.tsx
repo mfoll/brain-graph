@@ -137,6 +137,7 @@ export function GraphView(props: GraphViewProps) {
             y: { attribute: "y" },
             color: { attribute: "color" },
             shape: { attribute: "shape", defaultValue: "circle" },
+            opacity: { attribute: "recency", defaultValue: 1 },
             label: { attribute: "label" },
             size: { whenState: "isHovered", then: (a) => a.size * 1.35, else: { attribute: "size" } },
             labelColor: theme.label,

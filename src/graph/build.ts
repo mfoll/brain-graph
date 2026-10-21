@@ -11,6 +11,8 @@ export interface NodeAttrs {
   typeColor: string;
   shape: string;
   home: string | null;
+  /** 1 = edited recently … 0.15 = untouched for months; drives opacity when the recency toggle is on. */
+  recency: number;
   size: number;
   degree: number;
   x: number;
@@ -85,6 +87,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       typeColor,
       shape: "circle",
       home: n.home,
+      recency: 1,
       size: 2.5 + Math.min(14, Math.sqrt(degree) * 1.15),
       degree,
       x: 0,

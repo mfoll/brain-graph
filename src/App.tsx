@@ -66,6 +66,8 @@ export default function App() {
     hideOrphans: false,
     focusDepth: 0,
     subtree: null,
+    collapseSources: false,
+    recency: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState(false);
@@ -130,6 +132,32 @@ export default function App() {
     if (filteredGraph && data && homeIndex) applyColors(filteredGraph, colorMode, homeLevel, data, homeIndex);
   }, [filteredGraph, data, homeIndex, colorMode, homeLevel]);
 
+  // Labels carry the folded Source count; opacity carries recency. Both are plain attributes.
+  useEffect(() => {
+    if (!filteredGraph || !graph) return;
+    const sourceCount = new Map<string, number>();
+    if (filters.collapseSources) {
+      graph.forEachEdge((_e, a, s, t) => {
+        if (a.kind === "belongs_to" && graph.getNodeAttribute(s, "type") === "Source") sourceCount.set(t, (sourceCount.get(t) ?? 0) + 1);
+      });
+    }
+    const now = Date.now();
+    filteredGraph.updateEachNodeAttributes(
+      (id, a) => {
+        const note = byId.get(id);
+        const n = sourceCount.get(id);
+        const label = n ? `${note?.title ?? a.label} +${n}` : (note?.title ?? a.label);
+        let recency = 1;
+        if (filters.recency && note) {
+          const days = (now - new Date(note.modified).getTime()) / 86_400_000;
+          recency = days < 7 ? 1 : days < 30 ? 0.7 : days < 90 ? 0.4 : 0.15;
+        }
+        return { ...a, label, recency };
+      },
+      { attributes: ["label", "recency"] },
+    );
+  }, [filteredGraph, graph, byId, filters.collapseSources, filters.recency]);
+
   const hidden = useMemo(() => {
     const set = new Set<string>();
     if (!filteredGraph || !data || !homeIndex) return set;
@@ -137,6 +165,7 @@ export default function App() {
     for (const n of data.nodes) {
       const t = n.type ?? "(untyped)";
       if (!filters.types.has(t)) set.add(n.id);
+      else if (filters.collapseSources && t === "Source") set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
       else if (members && !members.has(n.id)) set.add(n.id);
     }
