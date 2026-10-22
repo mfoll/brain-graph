@@ -25,7 +25,9 @@ export interface Filters {
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
   /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
-  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "unassigned" } | null;
+  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "search"; query: string } | { kind: "unassigned" } | null;
+  /** Show wikilink targets that resolve to no note, as grey ghost nodes. */
+  ghosts: boolean;
   /** Hide notes with fewer visible links than this (group notes are always kept). 0 = off. */
   minDegree: number;
   /** Group region size multiplier. */
@@ -568,6 +570,10 @@ export function Sidebar(p: Props) {
             <label className="row">
               <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
               Hide orphans (no visible links)
+            </label>
+            <label className="row" title="Wikilinks whose target is no note in the vault (a typo, a renamed note, a template placeholder). Each distinct target is a grey ghost node linked from the notes that mention it; hover it to see them.">
+              <input type="checkbox" checked={filters.ghosts} onChange={(e) => onChange({ ...filters, ghosts: e.target.checked })} />
+              Show missing link targets ({new Set(data.unresolved.map((u) => u.raw.split("|")[0].split("#")[0].trim())).size})
             </label>
             <label className="row column" title="Fold the notes of one type into a +N count on the note they belong to. Useful for a type that is mostly leaves, such as sources or references; the list is ordered by how leaf-like each type is.">
               <span>Collapse a leaf type into its parent</span>

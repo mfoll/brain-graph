@@ -24,15 +24,15 @@ It is a standalone companion, not a Tolaria extension: it reads the vault folder
 
 **Regions and names.** A tinted region behind each group at the current roll-up level, built from discs around member notes and strokes along the hierarchy links inside the group, so a cluster reads as one shape. Regions scale with zoom and have a size slider. Group names sit at the median of their notes, placed largest first and nudged apart. Regions and names are separate toggles and fade while something is hovered or focused.
 
-**Sidebar.** *Explore* lists Groups (the hierarchy with note counts), Types (expandable to their notes, with facets such as `status` for one-click focus on, say, open Questions) and Links. Clicking a row focuses it: its notes stay lit and labelled, everything else fades, and a group's note opens in the panel. *Settings* holds everything that changes how the map is computed or drawn, split by effect: Grouping, Layout, Appearance, Filters. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…) and clears it in one click.
+**Sidebar.** *Explore* lists Groups (the hierarchy with note counts), Types (expandable to their notes, with facets such as `status` for one-click focus on, say, open Questions) and Links. Clicking a row focuses it: its notes stay lit and labelled, everything else fades, and a group's note opens in the panel. *Settings* holds everything that changes how the map is computed or drawn, split by effect: Grouping, Layout, Appearance, Filters. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…), each with its own undo, and holds the **views** menu: save the current filters, focus and colour level under a name, switch between saved views and the default, delete one. Views are kept per vault in the browser.
 
 **Note panel.** The note's Markdown rendered with callouts, tables and vault images; wikilinks navigate the map. A Links tab groups relationships by kind, a Members tab lists a group's notes by type, and a **why?** link on the breadcrumb shows the exact chain the viewer followed to assign the note. Back and forward arrows replay your path. **Open in Tolaria** uses the `tolaria://<vault>/<path>.md` deep link.
 
-**Audit views.** The Groups tree ends with **Unassigned**, the notes whose chain reaches no group. Filters hide archived notes and orphans, keep only notes with at least N visible links (skeleton view; group notes always stay), collapse one leaf type such as Sources into a `+N` count on its parent, and fade notes by time since last edit.
+**Audit views.** The Groups tree ends with **Unassigned**, the notes whose chain reaches no group. **Show missing link targets** draws every wikilink target that is no note (a typo, a renamed note, a template placeholder) as a grey ghost node linked from the notes that mention it. Filters hide archived notes and orphans, keep only notes with at least N visible links (skeleton view; group notes always stay), collapse one leaf type such as Sources into a `+N` count on its parent, and fade notes by time since last edit.
 
 **Layout.** ForceAtlas2, stepped a few iterations per animation frame and cooled so nodes come to rest within the run. Positions are saved per vault when a run stops, so the map is stable between sessions; new notes settle next to their links while the rest stays put. **Update layout** nudges the current map for under a second; **Reset layout** redoes it from scratch in a few seconds and keeps a backup of the previous map. Nodes are not draggable: hand placement would not survive the next run.
 
-**Sharing.** **Export PNG** saves the current view at twice the screen resolution. The URL carries the vault, note, focus and roll-up level (`?vault=…&note=…&focus=hub:genesis&level=0`), so a note in Tolaria or an agent report can link straight into a view. Everything else you toggle is remembered per vault in the browser.
+**Sharing.** **Export PNG** saves the current view at twice the screen resolution. The URL carries the vault, note, focus and roll-up level (`?vault=…&note=…&focus=hub:genesis&level=0`, or `focus=search:budget` for a search), so a note in Tolaria or an agent report can link straight into a view. Everything else you toggle is remembered per vault in the browser.
 
 **Live.** The server watches the vault and the map rebuilds when a note changes.
 
@@ -58,9 +58,10 @@ Then open <http://localhost:5178>. Asking a coding agent to install it works too
 ## Everyday use
 
 - **Switch vaults** with the dropdown at the top left. **Manage vaults…** adds a folder by path, removes one, and chooses whether to include the vaults registered in Tolaria (read from its registry when present). Each vault keeps its own map, filters and grouping; only the selected vault is read.
-- **Find a note** with the search box (Enter jumps to it), or follow a link from Tolaria or a report with the URL form above.
+- **Find notes** with the search box: Enter jumps to a single match and focuses all of them when there are several, like a group. Or follow a link from Tolaria or a report with the URL form above.
+- **Keep a view** you come back to (say, open Questions with regions off) with Save current view… in the state line; the Default view entry resets everything.
 - **Read a cluster** by clicking its group in Explore, or a Type facet such as Project → Active. Escape unfocuses, then closes the panel.
-- **Review the hierarchy** by focusing Unassigned, opening a suspect note and reading its **why?** chain, then fixing `belongs_to` in Tolaria or with your agent. The map rebuilds on save.
+- **Review the hierarchy** by focusing Unassigned, opening a suspect note and reading its **why?** chain, then fixing `belongs_to` in Tolaria or with your agent. Turn on missing link targets to catch broken wikilinks the same way. The map rebuilds on save.
 - **Tune the picture** in Settings: pick which types act as groups, raise the structure-over-lateral ratio to tighten clusters, lower link opacity on dense vaults, or hide a noisy relationship kind in Explore → Links. Slider changes run a short layout update so the effect is visible at once.
 
 ## Vault conventions

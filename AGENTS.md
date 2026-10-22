@@ -36,7 +36,7 @@ pnpm graph:homes /path/to/vault -- --json  # the same, machine-readable
 pnpm graph:dump /path/to/vault -- --summary # parser statistics and unresolved links
 ```
 
-`graph:homes` lists Projects whose parent is a Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes reaching no group. Use it as input for a hierarchy review; the viewer shows the same chains interactively (Explore → Groups → Unassigned, and the **why?** link on a note).
+`graph:homes` lists Projects whose parent is a Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes reaching no group. Use it as input for a hierarchy review; the viewer shows the same chains interactively (Explore → Groups → Unassigned, and the **why?** link on a note). Broken wikilinks are the `unresolved` list of `graph:dump`, shown in the viewer by Settings → Filters → Show missing link targets.
 
 ## Linking into a view
 
@@ -46,6 +46,7 @@ The viewer keeps its state in the URL, so a report or a vault note can point at 
 http://localhost:5178/?vault=<slug>&note=<stem>              # a note, panel open
 http://localhost:5178/?vault=<slug>&focus=hub:<stem>&level=0 # a group lit, coloured at the first level
 http://localhost:5178/?vault=<slug>&focus=type:Question
+http://localhost:5178/?vault=<slug>&focus=search:<text>              # every note whose title or path contains the text
 http://localhost:5178/?vault=<slug>&focus=unassigned
 ```
 

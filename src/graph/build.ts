@@ -1,7 +1,7 @@
 import Graph from "graphology";
 import { circular } from "graphology-layout";
 import type { VaultGraph } from "../types";
-import { UNTYPED_COLOR, normalizeColor } from "./colors";
+import { GHOST_COLOR, UNTYPED_COLOR, normalizeColor } from "./colors";
 import { homeColor, isStructureKind, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
 
 export interface NodeAttrs {
@@ -20,6 +20,8 @@ export interface NodeAttrs {
   archived: boolean;
   status: string | null;
   folder: string;
+  /** Target of a wikilink that resolves to no note (shown behind Filters → missing targets). */
+  ghost?: boolean;
   [key: string]: unknown;
 }
 export interface EdgeAttrs {
@@ -170,6 +172,22 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: isStructureKind(e.kind) ? 1 : lateralEmphasis(DEFAULT_LAYOUT.ratio) });
     }
   }
+  // Unresolved wikilink targets become small grey ghost nodes, one per distinct target, linked by a
+  // "missing" edge from each note that points at them; `|alias` and `#anchor` suffixes are dropped.
+  for (const u of data.unresolved) {
+    const target = u.raw.split("|")[0].split("#")[0].trim().replace(/\.md$/, "");
+    if (!target || !graph.hasNode(u.from)) continue;
+    const id = `missing:${target}`;
+    if (!graph.hasNode(id)) graph.addNode(id, { label: target, type: "(missing)", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "circle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", ghost: true });
+    const key = `${u.from}|missing|${id}`;
+    if (!graph.hasEdge(key)) {
+      graph.addEdgeWithKey(key, u.from, id, { kind: "missing", weight: edgeWeight("missing"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });
+      graph.updateNodeAttribute(id, "degree", (d) => (d as number) + 1);
+    }
+  }
+  graph.forEachNode((id, a) => {
+    if (a.ghost) graph.setNodeAttribute(id, "size", nodeSize(a.degree));
+  });
   // Seed positions deterministically so a first layout is reproducible between reloads.
   circular.assign(graph, { scale: 100 });
   // Nudge by degree so hubs start closer to the centre and FA2 converges faster.

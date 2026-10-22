@@ -5,6 +5,7 @@ import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
+import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
 
 function useTheme() {
@@ -81,12 +82,52 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
 
 const VAULT_KEY = "brain-graph.vault";
 
+/** The view as remembered per vault: every filter except hidden sets, which are stored by name so new types and kinds stay visible. */
+type RememberedView = Partial<Omit<Filters, "types" | "kinds" | "spotlight">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseSources?: boolean };
+function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters {
+  const hiddenTypes = new Set(v.hiddenTypes ?? ["Type"]);
+  const hiddenKinds = new Set(v.hiddenKinds ?? ["body"]);
+  return {
+    ...f,
+    hideArchived: v.hideArchived ?? true,
+    hideOrphans: v.hideOrphans ?? false,
+    focusDepth: 0,
+    collapseType: v.collapseType ?? (v.collapseSources ? "Source" : null),
+    recency: v.recency ?? false,
+    hulls: v.hulls ?? true,
+    names: v.names ?? true,
+    labels: v.labels ?? false,
+    minDegree: v.minDegree ?? 0,
+    regionSize: v.regionSize ?? 1,
+    linkOpacity: v.linkOpacity ?? 0.55,
+    ghosts: v.ghosts ?? false,
+    types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
+    kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => !hiddenKinds.has(k))),
+  };
+}
+function filtersToView(f: Filters, data: VaultGraph): RememberedView {
+  const { types, kinds, spotlight: _sp, focusDepth: _fd, ...rest } = f;
+  void _sp;
+  void _fd;
+  return { ...rest, hiddenTypes: data.types.map((t) => t.name).filter((t) => !types.has(t)), hiddenKinds: data.edgeKinds.map((k) => k.kind).filter((k) => !kinds.has(k)) };
+}
+/** A named view: the remembered filters plus focus and roll-up level, kept per vault in the browser. */
+type SavedView = { name: string; view: RememberedView; focus: string | null; level: HomeLevel };
+const readViews = (slug: string): SavedView[] => {
+  try {
+    return JSON.parse(localStorage.getItem(`brain-graph.views.${slug}`) ?? "[]");
+  } catch {
+    return [];
+  }
+};
+
 type Spotlight = Filters["spotlight"];
 const spotlightToParam = (sp: Spotlight) => {
   if (!sp) return null;
   if (sp.kind === "type") return `type:${sp.value}`;
   if (sp.kind === "hub") return `hub:${sp.id}`;
   if (sp.kind === "facet") return `facet:${sp.type}:${sp.key}:${sp.value}`;
+  if (sp.kind === "search") return `search:${sp.query}`;
   return "unassigned";
 };
 const paramToSpotlight = (v: string | null): Spotlight => {
@@ -94,6 +135,7 @@ const paramToSpotlight = (v: string | null): Spotlight => {
   if (v === "unassigned") return { kind: "unassigned" };
   if (v.startsWith("type:")) return { kind: "type", value: v.slice(5) };
   if (v.startsWith("hub:")) return { kind: "hub", id: v.slice(4) };
+  if (v.startsWith("search:") && v.length > 7) return { kind: "search", query: v.slice(7) };
   if (v.startsWith("facet:")) {
     const [type, key, ...rest] = v.slice(6).split(":");
     if (type && key && rest.length) return { kind: "facet", type, key, value: rest.join(":") };
@@ -224,37 +266,22 @@ export default function App() {
     minDegree: 0,
     regionSize: 1,
     linkOpacity: 0.55,
+    ghosts: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
   useEffect(() => {
     if (!data || initialised === data.vault.slug) return;
     // View filters are remembered per vault; types or kinds that no longer exist are dropped, new ones shown.
-    let remembered: Partial<Omit<Filters, "types" | "kinds">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseSources?: boolean } = {};
+    let remembered: RememberedView = {};
     try {
       remembered = JSON.parse(localStorage.getItem(`brain-graph.view.${data.vault.slug}`) ?? "{}");
     } catch {
       /* ignore */
     }
-    const hiddenTypes = new Set(remembered.hiddenTypes ?? ["Type"]);
-    const hiddenKinds = new Set(remembered.hiddenKinds ?? ["body"]);
-    setFilters((f) => ({
-      ...f,
-      hideArchived: remembered.hideArchived ?? true,
-      hideOrphans: remembered.hideOrphans ?? false,
-      focusDepth: 0,
-      collapseType: remembered.collapseType ?? (remembered.collapseSources ? "Source" : null),
-      recency: remembered.recency ?? false,
-      hulls: remembered.hulls ?? true,
-      names: remembered.names ?? true,
-      labels: remembered.labels ?? false,
-      minDegree: remembered.minDegree ?? 0,
-      regionSize: remembered.regionSize ?? 1,
-      linkOpacity: remembered.linkOpacity ?? 0.55,
-      types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
-      kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => !hiddenKinds.has(k))),
-      spotlight: initialised === null ? paramToSpotlight(initialUrl.get("focus")) : null,
-    }));
+    setFilters((f) => ({ ...viewToFilters(f, remembered, data), spotlight: initialised === null ? paramToSpotlight(initialUrl.get("focus")) : null }));
+    setViews(readViews(data.vault.slug));
+    setActiveView(null);
     const urlNote = initialised === null ? initialUrl.get("note") : null;
     setSelected(urlNote && data.nodes.some((n) => n.id === urlNote) ? urlNote : null);
     history.current = { past: [], future: [] };
@@ -362,10 +389,10 @@ export default function App() {
     if (!graph || !data) return null;
     const g = graph.copy();
     g.forEachEdge((e, a) => {
-      if (!filters.kinds.has(a.kind)) g.dropEdge(e);
+      if (a.kind === "missing" ? !filters.ghosts : !filters.kinds.has(a.kind)) g.dropEdge(e);
     });
     return g;
-  }, [graph, data, filters.kinds]);
+  }, [graph, data, filters.kinds, filters.ghosts]);
 
   // Node size multiplier is a display setting: no run needed.
   useEffect(() => {
@@ -419,6 +446,7 @@ export default function App() {
       else if (filters.collapseType && t === filters.collapseType) set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
     }
+    if (!filters.ghosts) filteredGraph.forEachNode((n, a) => void (a.ghost && set.add(n)));
     if (filters.minDegree > 0) {
       // Skeleton view: drop notes with too few visible links, iterating since removals lower others' degrees.
       let changed = true;
@@ -468,6 +496,9 @@ export default function App() {
       for (const id of subtreeMembers(sp.id, data, homeIndex)) if (!hidden.has(id)) set.add(id);
     } else if (sp.kind === "facet") {
       for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.type && String(n.properties[sp.key] ?? "") === sp.value && !hidden.has(n.id)) set.add(n.id);
+    } else if (sp.kind === "search") {
+      const q = sp.query.toLowerCase();
+      for (const n of data.nodes) if ((n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) && !hidden.has(n.id)) set.add(n.id);
     } else {
       // Unassigned: notes that are not groups themselves and whose chain reaches no group.
       for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
@@ -543,22 +574,43 @@ export default function App() {
   // Remember the view filters per vault (not the spotlight: that is URL state).
   useEffect(() => {
     if (!data || initialised !== data.vault.slug) return;
-    const { types, kinds, spotlight: _sp, focusDepth: _fd, ...rest } = filters;
-    void _sp;
-    void _fd;
     try {
-      localStorage.setItem(
-        `brain-graph.view.${data.vault.slug}`,
-        JSON.stringify({
-          ...rest,
-          hiddenTypes: data.types.map((t) => t.name).filter((t) => !types.has(t)),
-          hiddenKinds: data.edgeKinds.map((k) => k.kind).filter((k) => !kinds.has(k)),
-        }),
-      );
+      localStorage.setItem(`brain-graph.view.${data.vault.slug}`, JSON.stringify(filtersToView(filters, data)));
     } catch {
       /* ignore */
     }
   }, [filters, data, initialised]);
+
+  // Named views: pick one from the state line, save the current one, delete the active one.
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [activeView, setActiveView] = useState<string | null>(null);
+  const writeViews = (slug: string, next: SavedView[]) => {
+    setViews(next);
+    try {
+      localStorage.setItem(`brain-graph.views.${slug}`, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+  const applyView = (v: SavedView | null) => {
+    if (!data) return;
+    setFilters((f) => ({ ...viewToFilters(f, v?.view ?? {}, data), spotlight: paramToSpotlight(v?.focus ?? null) }));
+    setHomeLevel(v?.level ?? 1);
+    setActiveView(v?.name ?? null);
+  };
+  const saveView = () => {
+    if (!data) return;
+    const name = window.prompt("Name this view", activeView ?? "")?.trim();
+    if (!name) return;
+    const next: SavedView = { name, view: filtersToView(filters, data), focus: spotlightToParam(filters.spotlight), level: homeLevel };
+    writeViews(data.vault.slug, [...views.filter((v) => v.name !== name), next].sort((a, b) => a.name.localeCompare(b.name)));
+    setActiveView(name);
+  };
+  const deleteView = () => {
+    if (!data || !activeView || !window.confirm(`Delete the view “${activeView}”?`)) return;
+    writeViews(data.vault.slug, views.filter((v) => v.name !== activeView));
+    setActiveView(null);
+  };
 
   // Escape: unfocus first, then close the panel.
   useEffect(() => {
@@ -587,6 +639,7 @@ export default function App() {
 
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
   const clickGraph = (id: string | null) => {
+    if (id && filteredGraph?.getNodeAttribute(id, "ghost")) return;
     setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
     select(id);
   };
@@ -615,7 +668,7 @@ export default function App() {
   const stateParts: { label: string; title: string; clear: () => void }[] = [];
   if (filters.spotlight) {
     const sp = filters.spotlight;
-    const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : "unassigned notes";
+    const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : sp.kind === "search" ? `“${sp.query}” (${spotlight?.size ?? 0})` : "unassigned notes";
     stateParts.push({ label: `focused: ${what}`, title: "Everything else is faded. Click × to unfocus.", clear: () => setFilters((f) => ({ ...f, spotlight: null })) });
   }
   const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type");
@@ -637,11 +690,12 @@ export default function App() {
   if (filters.collapseType) stateParts.push({ label: `${filters.collapseType} collapsed`, title: `${filters.collapseType} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseType: null })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
+  if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Wikilink targets that are no note are drawn as grey ghost nodes.", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
   if (filters.focusDepth) stateParts.push({ label: `depth ${filters.focusDepth} around selection`, title: "Only the selected note's neighbourhood is shown.", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });
   const kindsChanged = layoutKinds.current !== null && (layoutKinds.current.size !== filters.kinds.size || [...filters.kinds].some((k) => !layoutKinds.current!.has(k)));
   const selectedNode = selected ? byId.get(selected) : null;
-  const visibleCount = data.nodes.length - hidden.size;
+  const visibleCount = data.nodes.reduce((n, note) => n + (hidden.has(note.id) ? 0 : 1), 0);
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
 
   return (
@@ -673,12 +727,13 @@ export default function App() {
         <div className="search">
           <input
             type="search"
-            placeholder="Search notes…"
+            placeholder="Search notes… (Enter focuses all matches)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && matches[0]) {
-                select(matches[0].id, true);
+                if (matches.length === 1) select(matches[0].id, true);
+                else setFilters((f) => ({ ...f, spotlight: { kind: "search", query: query.trim() } }));
                 setQuery("");
               }
               if (e.key === "Escape") setQuery("");
@@ -729,11 +784,27 @@ export default function App() {
         {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
       <div className={`stateline${stateParts.length === 0 && !kindsChanged ? " empty" : ""}`}>
-        {stateParts.length === 0 && !kindsChanged && (
-          <span className="muted small" title="Nothing focused; all types and relationship links shown; body links and archived notes hidden.">
-            Default view
-          </span>
-        )}
+        <select
+          className="view-select"
+          value={activeView ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__save__") saveView();
+            else if (v === "__delete__") deleteView();
+            else applyView(views.find((x) => x.name === v) ?? null);
+          }}
+          title="Views: filters, focus and colour level saved by name for this vault, in this browser. Default: nothing focused, all types and relationship links shown, body links and archived notes hidden."
+        >
+          <option value="">Default view</option>
+          {views.map((v) => (
+            <option key={v.name} value={v.name}>
+              {v.name}
+            </option>
+          ))}
+          <option disabled>──</option>
+          <option value="__save__">Save current view…</option>
+          {activeView && <option value="__delete__">Delete “{activeView}”</option>}
+        </select>
           <span className="chips-inline">
             {stateParts.map((part) => (
               <span key={part.label} className="state-chip" title={part.title}>
@@ -752,11 +823,6 @@ export default function App() {
               </span>
             )}
           </span>
-          {stateParts.length > 1 && (
-            <button className="link small" title="Back to the default view: nothing focused, all types and relationship links shown, body links hidden, archived hidden" onClick={() => stateParts.forEach((p) => p.clear())}>
-              reset view
-            </button>
-          )}
       </div>
 
       <Sidebar

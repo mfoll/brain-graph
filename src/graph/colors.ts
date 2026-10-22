@@ -9,6 +9,7 @@ const NAMED: Record<string, string> = {
 // Fallback palette for Types that declare no color (distinct from the Tailwind-ish named set above).
 const FALLBACK = ["#c084fc", "#fb7185", "#34d399", "#60a5fa", "#fbbf24", "#a3e635", "#f472b6", "#2dd4bf"];
 
+export const GHOST_COLOR = "#b8bcc4";
 export const UNTYPED_COLOR = "#8b8f98";
 
 export function normalizeColor(value: string | null, index: number): string {
