@@ -24,7 +24,7 @@ It is a standalone companion, not a Tolaria extension: it reads the vault folder
 
 **Regions and names.** A tinted region behind each group at the current roll-up level, built from discs around member notes and strokes along the hierarchy links inside the group, so a cluster reads as one shape. Regions scale with zoom and have a size slider. Group names sit at the median of their notes, placed largest first and nudged apart. Regions and names are separate toggles and fade while something is hovered or focused.
 
-**Sidebar.** *Explore* lists Groups (the hierarchy with note counts), Types (expandable to their notes, with facets such as `status` for one-click focus on, say, open Questions) and Links. Clicking a row focuses it: its notes stay lit and labelled, everything else fades, and a group's note opens in the panel. *Settings* holds everything that changes how the map is computed or drawn, split by effect: Grouping, Layout, Appearance, Filters. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…), each with its own undo, and holds the **views** menu: save the current filters, focus and colour level under a name, switch between saved views and the default, delete one. Views are kept per vault in the browser.
+**Sidebar.** *Explore* lists Groups (the hierarchy with note counts), Types (expandable to their notes, with facets such as `status` for one-click focus on, say, open Questions) and Links. Clicking a row focuses it: its notes stay lit and labelled, everything else fades, and a group's note opens in the panel. *Settings* holds everything that changes how the map is computed or drawn, split by effect: Grouping, Layout, Appearance (palette, colour level, node size, link opacity and width, the node size from which labels appear as you zoom, regions, names, recency), Filters. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…), each with its own undo, and holds the **views** menu: save the current filters, focus and colour level under a name, switch between saved views and the default, delete one. Views are kept per vault in the browser.
 
 **Note panel.** The note's Markdown rendered with callouts, tables and vault images; wikilinks navigate the map. A Links tab groups relationships by kind, a Members tab lists a group's notes by type, and a **why?** link on the breadcrumb shows the exact chain the viewer followed to assign the note. Back and forward arrows replay your path. **Open in Tolaria** uses the `tolaria://<vault>/<path>.md` deep link.
 
@@ -74,11 +74,14 @@ The defaults follow Tolaria and the Second Brain template; each is a per-vault s
 | Child → parent links | `belongs_to`, `parent_*` keys | Settings → Grouping → Link roles (↑) |
 | Parent → children links, followed only as a fallback | `has` | Link roles (↓) and the fallback checkbox |
 | Lateral links | `related_to`, `surface_for`, body wikilinks, every other key | Link roles (↔) |
+| Root types, whose link to another type is context rather than a parent | Responsibility | `rootTypes` in the home settings (no UI yet) |
+| Outside the hierarchy: no group, not unassigned either | Recap, Guide, Type, Operation, types whose `Type` note has `hierarchy_exempt: true`, archived notes | `exemptTypes` (no UI yet) |
+| Parentless notes coloured by their first lateral link to a group | Person | `lateralHomeTypes` (no UI yet) |
 | Type colours when no groups exist | `_color` on `type: Type` notes | the vault's Type notes |
 | Archived notes | `_archived: true` or `archived: true` | Settings → Filters |
 | Deep links | `tolaria://<slug>/<path>.md`, slug from the vault label | `VAULT_SLUG` |
 
-The `has` fallback exists because vaults use `has` for selective entry points rather than ownership: in the vault pictured above, 299 notes would have been homed through `has` alone before `belongs_to` was given priority. The grouping rules are those of the template's [hierarchy audit](https://github.com/mfoll/second-brain-template); the `graph:homes` command below prints what the viewer infers so the two can be compared.
+The `has` fallback exists because vaults use `has` for selective entry points rather than ownership: in the vault pictured above, 299 notes would have been homed through `has` alone before `belongs_to` was given priority. The root, exempt and Person rules follow the template's hierarchy contract (its ADR on `belongs_to` roots), so the viewer and the template's [hierarchy audit](https://github.com/mfoll/second-brain-template) agree on homes; the `graph:homes` command below prints what the viewer infers, from the same code.
 
 ## Development
 

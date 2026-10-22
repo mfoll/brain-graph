@@ -36,7 +36,7 @@ pnpm graph:homes /path/to/vault -- --json  # the same, machine-readable
 pnpm graph:dump /path/to/vault -- --summary # parser statistics and unresolved links
 ```
 
-`graph:homes` lists Projects whose parent is a Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes reaching no group. Use it as input for a hierarchy review; the viewer shows the same chains interactively (Explore → Groups → Unassigned, and the **why?** link on a note). Broken wikilinks are the `unresolved` list of `graph:dump`, shown in the viewer by Settings → Filters → Show missing link targets.
+`graph:homes` runs the viewer's own inference (Responsibilities as roots; Recaps, Guides, Operations, `hierarchy_exempt` types and archived notes outside; parentless Persons coloured by their first related group) and lists Projects whose parent is an unflagged Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes reaching no group. Use it as input for a hierarchy review; the viewer shows the same chains interactively (Explore → Groups → Unassigned, and the **why?** link on a note). Broken wikilinks are the `unresolved` list of `graph:dump`, shown in the viewer by Settings → Filters → Show missing link targets.
 
 ## Linking into a view
 
