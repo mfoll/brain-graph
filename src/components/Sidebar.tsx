@@ -84,7 +84,7 @@ const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 export function Sidebar(p: Props) {
   const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
   const ls = layoutSettings;
-  const layoutIsDefault = JSON.stringify(ls) === JSON.stringify(DEFAULT_LAYOUT);
+  const layoutIsDefault = JSON.stringify({ ...ls, nodeScale: 1 }) === JSON.stringify(DEFAULT_LAYOUT);
 
   // Facets: scalar frontmatter keys shared by enough notes and with few distinct values (a status, a
   // kind, a period), not identifiers or URLs; `status` first when present.
@@ -395,9 +395,9 @@ export function Sidebar(p: Props) {
         <>
           <Section
             id="grouping"
+            title="Grouping"
             open={!collapsed.has("grouping")}
             onToggle={toggleSection}
-            title="Grouping and colour"
             tools={
               !groupingIsDefault && (
                 <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true })} title={`Back to ${homeDefaults.join(", ")} with the has fallback`}>
@@ -408,7 +408,7 @@ export function Sidebar(p: Props) {
           >
             <div className="muted small hint">
               Types that act as groups, each drawn with its own shape in the order picked; other notes are circles. A note joins the nearest group reached through its <code>belongs_to</code> (or{" "}
-              <code>parent_*</code>) chain, and takes its colour from it. Default for this vault: {homeDefaults.join(", ")}.
+              <code>parent_*</code>) chain. Default for this vault: {homeDefaults.join(", ")}.
             </div>
             <div className="chips">
               {types
@@ -424,47 +424,22 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
               Fall back to <code>has</code> links
             </label>
-            <label className="row column" title="How far up the hierarchy a note takes its colour from.">
-              <span>
-                Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
-              </span>
-              <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
-            </label>
-          </Section>
-
-          <Section id="regions" open={!collapsed.has("regions")} onToggle={toggleSection} title="Regions and names">
-            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
-              <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
-              Show group regions
-            </label>
-            <label className="row" title="A group's name is shown at the median position of its notes when at least four are visible; names are placed largest group first and nudged to avoid each other. They fade while something is hovered or focused and shrink while all note labels are shown.">
-              <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
-              Show group names
-            </label>
-            {filters.hulls && (
-              <label className="row column" title="How far a region extends around its notes and along the links inside the group.">
-                <span>
-                  Region size: <strong>{filters.regionSize}×</strong>
-                </span>
-                <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
-              </label>
-            )}
           </Section>
 
           <Section
             id="layout"
+            title="Layout"
             open={!collapsed.has("layout")}
             onToggle={toggleSection}
-            title="Layout"
             tools={
               !layoutIsDefault && (
-                <button className="link small" onClick={() => onLayoutSettings(DEFAULT_LAYOUT)}>
+                <button className="link small" onClick={() => onLayoutSettings({ ...DEFAULT_LAYOUT, nodeScale: ls.nodeScale })}>
                   reset
                 </button>
               )
             }
           >
-            <div className="muted small hint">Changes apply live in a short run. The map always fills the same frame; these settings change how notes are distributed within it.</div>
+            <div className="muted small hint">Where notes sit. Changes apply live in a short run; the map always fills the same frame, these settings change how notes are distributed within it.</div>
             <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
               <span>
                 Gravity: <strong>{ls.gravity}</strong>
@@ -483,31 +458,48 @@ export function Sidebar(p: Props) {
             </label>
           </Section>
 
-          <Section id="display" open={!collapsed.has("display")} onToggle={toggleSection} title="Display">
-            <label className="row column" title="Multiplies every node's size (display only).">
+          <Section id="appearance" title="Appearance" open={!collapsed.has("appearance")} onToggle={toggleSection}>
+            <div className="muted small hint">How the graph is drawn; nothing here moves or hides a note.</div>
+            <label className="row column" title="How far up the hierarchy a note takes its colour from.">
+              <span>
+                Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
+              </span>
+              <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
+            </label>
+            <label className="row column" title="Multiplies every node's size.">
               <span>
                 Node size: <strong>{ls.nodeScale}×</strong>
               </span>
               <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
             </label>
+            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
+              <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
+              Group regions
+            </label>
+            {filters.hulls && (
+              <label className="row column indent" title="How far a region extends around its notes and along the links inside the group.">
+                <span>
+                  Region size: <strong>{filters.regionSize}×</strong>
+                </span>
+                <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
+              </label>
+            )}
+            <label className="row" title="A group's name is shown at the median position of its notes when at least four are visible; names are placed largest group first and nudged to avoid each other. They fade while something is hovered or focused and shrink while all note labels are shown.">
+              <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
+              Group names
+            </label>
             <label className="row" title="Labels are otherwise shown only for hovered, selected or focused notes.">
               <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
-              Show all note labels
+              All note labels
             </label>
             <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
               <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
               Fade notes not edited recently
             </label>
-            <label className="row column">
-              <span>
-                Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
-                {!selected && filters.focusDepth > 0 && <span className="muted"> (select a note)</span>}
-              </span>
-              <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
-            </label>
           </Section>
 
-          <Section id="filter" open={!collapsed.has("filter")} onToggle={toggleSection} title="What is shown">
+          <Section id="filter" title="Filters" open={!collapsed.has("filter")} onToggle={toggleSection}>
+            <div className="muted small hint">What is shown at all. Each active filter appears as a chip under the header, with its own undo.</div>
             <label className="row">
               <input type="checkbox" checked={filters.hideArchived} onChange={(e) => onChange({ ...filters, hideArchived: e.target.checked })} />
               Hide archived notes
@@ -526,7 +518,14 @@ export function Sidebar(p: Props) {
               </span>
               <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
             </label>
-            <div className="muted small hint">Hiding a single type: hover its row in Explore → Types and use "hide". Hiding link kinds: Explore → Links.</div>
+            <label className="row column">
+              <span>
+                Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
+                {!selected && filters.focusDepth > 0 && <span className="muted"> (select a note)</span>}
+              </span>
+              <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
+            </label>
+            <div className="muted small hint">To hide one type or link kind: Explore → Types (hover a row, "hide") or Explore → Links.</div>
           </Section>
         </>
       )}

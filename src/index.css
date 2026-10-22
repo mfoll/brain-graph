@@ -266,3 +266,4 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .state-chip.stale { border-color: #f59e0b; color: #b45309; }
 .chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 999px; }
 .chip-x:hover { background: var(--panel-2); color: var(--fg); }
+.row.indent { margin-left: 22px; }
