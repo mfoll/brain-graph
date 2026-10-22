@@ -129,8 +129,11 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     }
     octx.fill();
     if (pts.length >= 4 || anchor === opts.emphasis) {
+      // At the median of the visible members; a name whose place is off-screen is simply not drawn
+      // (clamping it to the edge put names far from their group when zoomed in).
       const x = median(pts.map((p) => p.x));
-      const y = Math.min(height - 16, Math.max(16, median(pts.map((p) => p.y))));
+      const y = median(pts.map((p) => p.y));
+      if (x < 0 || x > width || y < 0 || y > height) continue;
       labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: anchor === opts.emphasis ? Infinity : pts.length });
     }
   }
@@ -147,30 +150,28 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   fctx.textAlign = "center";
   fctx.textBaseline = "middle";
   fctx.lineJoin = "round";
-  // Largest groups are placed first. A name that would overlap an already placed one is nudged up or
-  // down (a few steps) before being given up; the emphasised group is never given up.
+  // Largest groups are placed first. A name that would overlap an already placed one is nudged one
+  // line up or down before being given up, so a name never strays far from its group; the emphasised
+  // group is never given up.
   const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
   const overlaps = (b: { x0: number; y0: number; x1: number; y1: number }) => placed.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
   for (const l of labels.sort((a, b) => b.n - a.n)) {
     const n = Number.isFinite(l.n) ? l.n : 64;
-    const size = Math.round((opts.quiet ? 10 : 12) + Math.min(opts.quiet ? 8 : 12, Math.log2(n) * (opts.quiet ? 1.1 : 1.6)));
-    fctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
+    // 11 px for a small group up to 17 px for the largest (quiet: 10 to 14) instead of up to 24 px bold.
+    const size = Math.round((opts.quiet ? 10 : 11) + Math.min(opts.quiet ? 4 : 6, Math.log2(n) * (opts.quiet ? 0.6 : 0.8)));
+    fctx.font = `600 ${size}px Inter, system-ui, sans-serif`;
     const w = fctx.measureText(l.text).width + 12;
-    l.x = Math.min(width - w / 2 - 4, Math.max(w / 2 + 4, l.x));
     const h = size * 0.75;
-    const step = size * 1.6;
+    const step = size * 1.5;
     let box = { x0: l.x - w / 2, y0: l.y - h, x1: l.x + w / 2, y1: l.y + h };
     let ok = !overlaps(box);
-    for (let k = 1; !ok && k <= 3; k++) {
-      for (const dy of [k * step, -k * step]) {
-        const y = Math.min(height - h, Math.max(h, l.y + dy));
-        const cand = { x0: l.x - w / 2, y0: y - h, x1: l.x + w / 2, y1: y + h };
-        if (!overlaps(cand)) {
-          box = cand;
-          l.y = y;
-          ok = true;
-          break;
-        }
+    for (const dy of ok ? [] : [step, -step]) {
+      const cand = { x0: l.x - w / 2, y0: l.y + dy - h, x1: l.x + w / 2, y1: l.y + dy + h };
+      if (!overlaps(cand)) {
+        box = cand;
+        l.y += dy;
+        ok = true;
+        break;
       }
     }
     if (!ok && !Number.isFinite(l.n)) ok = true; // emphasised: draw anyway
