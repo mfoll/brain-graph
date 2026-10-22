@@ -53,7 +53,7 @@ npm install -g github:mfoll/brain-graph
 brain-graph ~/path/to/vault
 ```
 
-Then open <http://localhost:5178>. The viewer does not write to the vault. Its own files live in `~/.config/brain-graph/`: `vaults.json` (the vault list) and `layouts/` (one saved map per vault, with a backup).
+Then open <http://localhost:5178>. Asking a coding agent to install it works too: [AGENTS.md](AGENTS.md) holds the recipe, the boundaries and the commands an agent can use. The viewer does not write to the vault. Its own files live in `~/.config/brain-graph/`: `vaults.json` (the vault list) and `layouts/` (one saved map per vault, with a backup).
 
 ## Everyday use
 
