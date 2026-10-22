@@ -214,11 +214,14 @@ export default function App() {
   const [query, setQuery] = useState("");
 
   // A restored map needs no layout; new notes get a short settling run with everything else pinned.
+  // After a drag, the same mechanism relaxes the moved node's neighbourhood (the node itself stays put).
+  const [dragPins, setDragPins] = useState<Set<string> | null>(null);
   const layoutPins = useMemo(() => {
+    if (dragPins) return dragPins;
     if (!built || !built.restored || built.fresh.length === 0) return null;
     const fresh = new Set(built.fresh);
     return new Set(built.graph.nodes().filter((n) => !fresh.has(n)));
-  }, [built]);
+  }, [built, dragPins]);
   useEffect(() => {
     if (!built) return;
     if (!built.restored) setLayoutRun("scratch");
@@ -228,6 +231,7 @@ export default function App() {
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
     setLayoutRun(null);
+    setDragPins(null);
     void saved.save(positions);
   };
   const recompute = async (fromScratch: boolean) => {
@@ -412,11 +416,18 @@ export default function App() {
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
   }, [data, selected, filters.spotlight, homeLevel]);
 
-  // Dragged nodes: keep their new positions and save them with the layout.
-  const onPositionsChanged = (positions: Positions) => {
+  // A dragged node keeps its new place; its two-hop neighbourhood then relaxes towards it in a short
+  // settle run with everything else pinned, so connected notes follow the move. Saved at the end.
+  const onPositionsChanged = (positions: Positions, dragged: string) => {
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
-    void saved.save(positions);
+    if (!filteredGraph || !filteredGraph.hasNode(dragged)) return void saved.save(positions);
+    const free = neighborhood(filteredGraph, dragged, 2);
+    free.delete(dragged);
+    for (const id of [...free]) if (hidden.has(id)) free.delete(id);
+    if (free.size === 0) return void saved.save(positions);
+    setDragPins(new Set(filteredGraph.nodes().filter((n) => !free.has(n))));
+    setLayoutRun("settle");
   };
 
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.

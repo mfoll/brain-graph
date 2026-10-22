@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { NoteNode, VaultGraph } from "../types";
 import { NoteReader } from "./NoteReader";
 import type { BrainGraph } from "../graph/build";
@@ -30,6 +30,11 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
   const isHub = homeIndex.hubs.has(node.id);
   const [tab, setTab] = useState<"note" | "links" | "members">("note");
   const [showWhy, setShowWhy] = useState(false);
+  // A newly opened note always starts on its text.
+  useEffect(() => {
+    setTab("note");
+    setShowWhy(false);
+  }, [node.id]);
   const members = isHub ? [...subtreeMembers(node.id, data, homeIndex)].filter((id) => id !== node.id) : [];
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const out = new Map<string, string[]>();
@@ -108,8 +113,8 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
       <div className="panel-nav">
         <button className="navbtn" onClick={onBack} disabled={!canBack} title="Back to the previous note" aria-label="Back">‹</button>
         <button className="navbtn" onClick={onForward} disabled={!canForward} title="Forward" aria-label="Forward">›</button>
+        <button className="navbtn close" onClick={onClose} title="Close (Esc)" aria-label="Close">×</button>
       </div>
-      <button className="close" onClick={onClose} aria-label="Close">×</button>
       <div className="type-chip" style={{ background: typeColors.get(typeName) }}>{typeName}</div>
       <h2>{node.title}</h2>
       <div className="meta">

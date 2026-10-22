@@ -37,8 +37,8 @@ export interface GraphViewProps {
   cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
   /** Refit the frame to the visible notes while the layout runs (first layout of a vault only). */
   layoutFits: boolean;
-  /** The user dragged nodes: positions to merge into the saved layout. */
-  onPositionsChanged: (positions: Positions) => void;
+  /** The user dragged a node: new positions to merge into the layout, and which node moved. */
+  onPositionsChanged: (positions: Positions, dragged: string) => void;
 }
 
 type GS = { focusActive: boolean; labelsAlways: boolean };
@@ -275,13 +275,17 @@ export function GraphView(props: GraphViewProps) {
     let dragged = false;
     sigma.on("nodeDragStart", () => (dragged = false));
     sigma.on("nodeDrag", () => (dragged = true));
-    sigma.on("nodeDragEnd", () => {
-      if (dragged) propsRef.current.onPositionsChanged(collectPositions(graph));
+    sigma.on("nodeDragEnd", ({ node }) => {
+      if (dragged) propsRef.current.onPositionsChanged(collectPositions(graph), node);
     });
     sigma.on("clickNode", ({ node }) => {
       if (!dragged) propsRef.current.onSelect(node);
     });
-    sigma.on("clickStage", () => propsRef.current.onSelect(null));
+    // Releasing a dragged node must not count as a click on the background.
+    sigma.on("clickStage", () => {
+      if (dragged) return void (dragged = false);
+      propsRef.current.onSelect(null);
+    });
     const onMove = (e: MouseEvent) => {
       const r = container.getBoundingClientRect();
       propsRef.current.onHover(undefined as unknown as null, { x: e.clientX - r.left, y: e.clientY - r.top });
