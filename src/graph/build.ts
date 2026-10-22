@@ -51,7 +51,8 @@ export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, ratio:
 /** Lateral links are drawn lighter as the ratio grows: emphasis 1 at ratio 1, 0.2 at the default ratio of 6. */
 export const lateralEmphasis = (ratio: number) => Math.pow(ratio, -0.9);
 
-export function applyEdgeWeights(graph: BrainGraph, ratio: number): void {
+export function applyEdgeWeights(graph: BrainGraph, ratioInput: number): void {
+  const ratio = Number.isFinite(ratioInput) && ratioInput > 0 ? ratioInput : DEFAULT_LAYOUT.ratio;
   const lateral = lateralEmphasis(ratio);
   graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, ratio), emphasis: isHierarchyKind(a.kind) ? 1 : lateral }), { attributes: ["weight", "emphasis"] });
 }

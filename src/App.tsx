@@ -262,10 +262,13 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`brain-graph.layout.${data.vault.slug}`);
       if (raw) {
-        const v = JSON.parse(raw) as Partial<LayoutSettings> & Record<string, unknown>;
-        next = { ...DEFAULT_LAYOUT, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULT_LAYOUT)) } as LayoutSettings;
-        // Older saves used other pull settings on a different scale: start them at the new default ratio.
-        if (!("ratio" in v)) next.ratio = DEFAULT_LAYOUT.ratio;
+        const v = JSON.parse(raw) as Record<string, unknown>;
+        // Only finite numbers within range survive; anything else (older keys, null, NaN) falls back to the default.
+        const num = (k: keyof LayoutSettings, min: number, max: number) => {
+          const x = v[k];
+          return typeof x === "number" && Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : DEFAULT_LAYOUT[k];
+        };
+        next = { nodeScale: num("nodeScale", 0.4, 2.5), gravity: num("gravity", 0.1, 3), ratio: num("ratio", 1, 10) };
       }
     } catch {
       /* ignore */
