@@ -190,6 +190,7 @@ export default function App() {
     collapseSources: false,
     recency: false,
     hulls: true,
+    names: true,
     labels: false,
     spotlight: null,
     minDegree: 0,
@@ -666,7 +667,7 @@ export default function App() {
           layoutMaxStep={run.maxStep}
           layoutSettings={layoutSettings}
           theme={theme.graph}
-          hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize } : null}
+          hulls={filters.hulls || filters.names ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize, regions: filters.hulls, names: filters.names } : null}
           showLabels={filters.labels}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}

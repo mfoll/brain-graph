@@ -14,8 +14,10 @@ export interface Filters {
   collapseSources: boolean;
   /** Fade notes by time since last edit. */
   recency: boolean;
-  /** Tinted hull and name behind each home group. */
+  /** Tinted region behind each home group. */
   hulls: boolean;
+  /** Group names over the graph. */
+  names: boolean;
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
   /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
@@ -431,9 +433,13 @@ export function Sidebar(p: Props) {
           </Section>
 
           <Section id="regions" open={!collapsed.has("regions")} onToggle={toggleSection} title="Regions and names">
-            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Its name is shown when at least four of its notes are visible; names are placed largest group first and nudged to avoid each other. Both fade while something is hovered or focused.">
+            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
               <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
-              Show group regions and names
+              Show group regions
+            </label>
+            <label className="row" title="A group's name is shown at the median position of its notes when at least four are visible; names are placed largest group first and nudged to avoid each other. They fade while something is hovered or focused and shrink while all note labels are shown.">
+              <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
+              Show group names
             </label>
             {filters.hulls && (
               <label className="row column" title="How far a region extends around its notes and along the links inside the group.">

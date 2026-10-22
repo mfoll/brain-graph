@@ -16,6 +16,10 @@ export interface HullOptions {
   emphasis?: string | null;
   /** Region size multiplier (1 = default). */
   regionSize?: number;
+  /** Draw the tinted regions. */
+  regions: boolean;
+  /** Draw the group names. */
+  names: boolean;
 }
 
 type Pt = { x: number; y: number };
@@ -131,9 +135,12 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     }
   }
 
-  ctx.globalAlpha = opts.dim ? 0.05 : 0.16;
-  ctx.drawImage(off, 0, 0, width, height);
-  ctx.globalAlpha = 1;
+  if (opts.regions) {
+    ctx.globalAlpha = opts.dim ? 0.05 : 0.16;
+    ctx.drawImage(off, 0, 0, width, height);
+    ctx.globalAlpha = 1;
+  }
+  if (!opts.names) return;
 
   // Names go on the front canvas so they stay readable over nodes and edges.
   fctx.globalAlpha = opts.dim ? 0.15 : opts.quiet ? 0.45 : 0.95;
