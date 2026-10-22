@@ -29,8 +29,28 @@ export interface EdgeAttrs {
   [key: string]: unknown;
 }
 
-const EDGE_WEIGHTS: Record<string, number> = { belongs_to: 4, has: 4, surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
-export const edgeWeight = (kind: string) => EDGE_WEIGHTS[kind] ?? (kind.startsWith("parent_") ? 4 : 1.5);
+const EDGE_WEIGHTS: Record<string, number> = { surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
+export const isHierarchyKind = (kind: string) => kind === "belongs_to" || kind === "has" || kind.startsWith("parent_");
+export const edgeWeight = (kind: string, hierarchyWeight = 4) => (isHierarchyKind(kind) ? hierarchyWeight : (EDGE_WEIGHTS[kind] ?? 1.5));
+
+/** Layout parameters the user can tune; see the Layout section of the sidebar. */
+export interface LayoutSettings {
+  /** ForceAtlas2 scalingRatio: repulsion between notes. Higher = more spread. */
+  spread: number;
+  /** ForceAtlas2 gravity: pull towards the centre. Lower = groups drift apart. */
+  gravity: number;
+  /** Weight of belongs_to / has / parent_* links relative to a related_to link. Higher = tighter groups. */
+  hierarchyWeight: number;
+  /** LinLog mode: tighter groups with more space between them. */
+  separateGroups: boolean;
+  /** adjustSizes: notes do not overlap, groups become less dense. */
+  preventOverlap: boolean;
+}
+export const DEFAULT_LAYOUT: LayoutSettings = { spread: 10, gravity: 1, hierarchyWeight: 4, separateGroups: false, preventOverlap: false };
+
+export function applyEdgeWeights(graph: BrainGraph, hierarchyWeight: number): void {
+  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, hierarchyWeight) }), { attributes: ["weight"] });
+}
 
 /**
  * Recolour (and reshape) nodes in place; Sigma picks the attribute changes up without a rebuild.

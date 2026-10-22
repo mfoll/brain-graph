@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
 import { SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
+import { DEFAULT_LAYOUT, type LayoutSettings } from "../graph/build";
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -43,12 +44,18 @@ interface Props {
   onFocusHub: (id: string) => void;
   /** Notes that reach no group at all. */
   unassignedCount: number;
+  layoutSettings: LayoutSettings;
+  onLayoutSettings: (s: LayoutSettings) => void;
+  onRelayout: () => void;
+  layoutRunning: boolean;
 }
 
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount } = p;
+  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
+  const ls = layoutSettings;
+  const layoutIsDefault = JSON.stringify(ls) === JSON.stringify(DEFAULT_LAYOUT);
   const unassignedSpot = filters.spotlight?.kind === "unassigned";
   const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
   const [showGrouping, setShowGrouping] = useState(false);
@@ -300,6 +307,51 @@ export function Sidebar(p: Props) {
             );
           })}
         </ul>
+      </section>
+
+      <section>
+        <header>
+          <h2>Layout physics</h2>
+          <span className="header-tools">
+            {!layoutIsDefault && (
+              <button className="link small" onClick={() => onLayoutSettings(DEFAULT_LAYOUT)}>
+                reset
+              </button>
+            )}
+          </span>
+        </header>
+        <div className="muted small hint">Changes apply on the next run. Groups form because hierarchy links pull harder than lateral ones; spread and gravity set how far everything sits apart.</div>
+        <label className="row column" title="Repulsion between notes (ForceAtlas2 scalingRatio).">
+          <span>
+            Spread: <strong>{ls.spread}</strong>
+          </span>
+          <input type="range" min={2} max={40} step={1} value={ls.spread} onChange={(e) => onLayoutSettings({ ...ls, spread: Number(e.target.value) })} />
+        </label>
+        <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart.">
+          <span>
+            Gravity: <strong>{ls.gravity}</strong>
+          </span>
+          <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
+        </label>
+        <label className="row column" title="How much harder belongs_to, has and parent_* links pull than a related_to link. Higher = tighter groups.">
+          <span>
+            Group pull: <strong>{ls.hierarchyWeight}×</strong>
+          </span>
+          <input type="range" min={1} max={10} step={0.5} value={ls.hierarchyWeight} onChange={(e) => onLayoutSettings({ ...ls, hierarchyWeight: Number(e.target.value) })} />
+        </label>
+        <label className="row" title="ForceAtlas2 LinLog mode: tighter groups with more space between them.">
+          <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
+          Separate groups more (LinLog)
+        </label>
+        <label className="row" title="Notes stop overlapping; dense groups loosen up.">
+          <input type="checkbox" checked={ls.preventOverlap} onChange={(e) => onLayoutSettings({ ...ls, preventOverlap: e.target.checked })} />
+          Prevent overlap
+        </label>
+        <div className="row">
+          <button className="button" onClick={p.onRelayout} title="Run the layout for 8 seconds from the current positions with these settings, then save.">
+            {p.layoutRunning ? "Stop" : "Re-run layout (8 s)"}
+          </button>
+        </div>
       </section>
 
       <section>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { applyColors, buildGraph, neighborhood, typeColorMap, type Positions } from "./graph/build";
+import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 
@@ -30,6 +30,7 @@ function useTheme() {
 const LAYOUT_RUNS = {
   scratch: { duration: 8000, start: 8 },
   recompute: { duration: 4000, start: 30 },
+  relayout: { duration: 8000, start: 12 }, // after changing the physics: longer, from the current positions
   settle: { duration: 2500, start: 30 },
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
@@ -213,15 +214,36 @@ export default function App() {
   const [fitRequest, setFitRequest] = useState(0);
   const [query, setQuery] = useState("");
 
+  // Layout physics, remembered per vault.
+  const [layoutSettings, setLayoutSettingsState] = useState<LayoutSettings>(DEFAULT_LAYOUT);
+  const [layoutSettingsVault, setLayoutSettingsVault] = useState<string | null>(null);
+  useEffect(() => {
+    if (!data || layoutSettingsVault === data.vault.slug) return;
+    let next = DEFAULT_LAYOUT;
+    try {
+      const raw = localStorage.getItem(`brain-graph.layout.${data.vault.slug}`);
+      if (raw) next = { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<LayoutSettings>) };
+    } catch {
+      /* ignore */
+    }
+    setLayoutSettingsState(next);
+    setLayoutSettingsVault(data.vault.slug);
+  }, [data, layoutSettingsVault]);
+  const setLayoutSettings = (next: LayoutSettings) => {
+    setLayoutSettingsState(next);
+    try {
+      if (data) localStorage.setItem(`brain-graph.layout.${data.vault.slug}`, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
   // A restored map needs no layout; new notes get a short settling run with everything else pinned.
-  // After a drag, the same mechanism relaxes the moved node's neighbourhood (the node itself stays put).
-  const [dragPins, setDragPins] = useState<Set<string> | null>(null);
   const layoutPins = useMemo(() => {
-    if (dragPins) return dragPins;
     if (!built || !built.restored || built.fresh.length === 0) return null;
     const fresh = new Set(built.fresh);
     return new Set(built.graph.nodes().filter((n) => !fresh.has(n)));
-  }, [built, dragPins]);
+  }, [built]);
   useEffect(() => {
     if (!built) return;
     if (!built.restored) setLayoutRun("scratch");
@@ -231,7 +253,6 @@ export default function App() {
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
     setLayoutRun(null);
-    setDragPins(null);
     void saved.save(positions);
   };
   const recompute = async (fromScratch: boolean) => {
@@ -253,6 +274,12 @@ export default function App() {
     });
     return g;
   }, [graph, data, filters.kinds]);
+
+  // Hierarchy pull is an edge attribute read by the layout on every step.
+  useEffect(() => {
+    if (graph) applyEdgeWeights(graph, layoutSettings.hierarchyWeight);
+    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.hierarchyWeight);
+  }, [graph, filteredGraph, layoutSettings.hierarchyWeight]);
 
   // Colours are node attributes, so switching mode never rebuilds the renderer.
   useEffect(() => {
@@ -416,18 +443,11 @@ export default function App() {
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
   }, [data, selected, filters.spotlight, homeLevel]);
 
-  // A dragged node keeps its new place; its two-hop neighbourhood then relaxes towards it in a short
-  // settle run with everything else pinned, so connected notes follow the move. Saved at the end.
-  const onPositionsChanged = (positions: Positions, dragged: string) => {
+  // A dragged node simply keeps its new place (saved with the layout).
+  const onPositionsChanged = (positions: Positions) => {
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
-    if (!filteredGraph || !filteredGraph.hasNode(dragged)) return void saved.save(positions);
-    const free = neighborhood(filteredGraph, dragged, 2);
-    free.delete(dragged);
-    for (const id of [...free]) if (hidden.has(id)) free.delete(id);
-    if (free.size === 0) return void saved.save(positions);
-    setDragPins(new Set(filteredGraph.nodes().filter((n) => !free.has(n))));
-    setLayoutRun("settle");
+    void saved.save(positions);
   };
 
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
@@ -575,6 +595,10 @@ export default function App() {
         onSelect={(id) => select(id, true)}
         onFocusHub={focusHub}
         unassignedCount={unassignedCount}
+        layoutSettings={layoutSettings}
+        onLayoutSettings={setLayoutSettings}
+        onRelayout={() => setLayoutRun(layoutRun ? null : "relayout")}
+        layoutRunning={layoutRun !== null}
       />
 
       <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />
@@ -589,6 +613,7 @@ export default function App() {
           layoutPins={layoutPins}
           layoutDuration={run.duration}
           layoutStart={run.start}
+          layoutSettings={layoutSettings}
           theme={theme.graph}
           hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
           showLabels={filters.labels}
@@ -604,7 +629,7 @@ export default function App() {
           focusRequest={focusRequest}
           fitRequest={fitRequest}
           cameraStore={cameraStore}
-          layoutFits={layoutRun === "scratch"}
+          layoutFits={layoutRun === "scratch" || layoutRun === "relayout"}
           onPositionsChanged={onPositionsChanged}
         />
         {hoveredNode && pointer && (

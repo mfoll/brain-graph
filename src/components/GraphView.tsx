@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
+import { collectPositions, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { clearHulls, drawHulls, type HullOptions } from "../graph/hulls";
 
@@ -17,6 +17,8 @@ export interface GraphViewProps {
   layoutDuration: number;
   /** Initial ForceAtlas2 slowDown: ~8 from scratch, ~16 to nudge an existing map. */
   layoutStart: number;
+  /** User-tunable physics. */
+  layoutSettings: LayoutSettings;
   theme: { background: string; label: string; labelHalo: string };
   /** Tinted group hulls behind the graph; null disables the layer. */
   hulls: Omit<HullOptions, "dim" | "halo"> | null;
@@ -346,8 +348,19 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits } = props;
-    const reset = () => Object.assign(layout, { iterations: 2, settings: { ...layout.settings, slowDown: layoutStart } });
+    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits, layoutSettings: ls } = props;
+    const reset = () =>
+      Object.assign(layout, {
+        iterations: 2,
+        settings: {
+          ...layout.settings,
+          slowDown: layoutStart,
+          scalingRatio: ls.spread,
+          gravity: ls.gravity,
+          linLogMode: ls.separateGroups,
+          adjustSizes: ls.preventOverlap,
+        },
+      });
     // Only a first layout refits the frame; a nudge or a settle keeps the view exactly where it is.
     const maybeFit = () => {
       if (layoutFits) fit();
