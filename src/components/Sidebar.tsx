@@ -18,7 +18,9 @@ export interface Filters {
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
   /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
-  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | null;
+  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "unassigned" } | null;
+  /** Hide notes with fewer visible links than this (group notes are always kept). 0 = off. */
+  minDegree: number;
 }
 
 interface Props {
@@ -39,12 +41,15 @@ interface Props {
   onSelect: (id: string) => void;
   /** Click on a Home row: focus the group (and select its note), or unfocus when already focused. */
   onFocusHub: (id: string) => void;
+  /** Notes that reach no group at all. */
+  unassignedCount: number;
 }
 
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub } = p;
+  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount } = p;
+  const unassignedSpot = filters.spotlight?.kind === "unassigned";
   const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
   const [showGrouping, setShowGrouping] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
@@ -189,7 +194,19 @@ export function Sidebar(p: Props) {
             </label>
           </div>
         )}
-        <ul className="tree">{homeIndex.roots.map(renderHub)}</ul>
+        <ul className="tree">
+          {homeIndex.roots.map(renderHub)}
+          <li className={`tree-row unassigned${unassignedSpot ? " spotlit" : ""}`} title="Notes whose belongs_to chain reaches no group note. Click to focus them; the audit's target is zero.">
+            <div className="tree-line">
+              <button className="disclosure empty" aria-hidden="true" />
+              <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: unassignedSpot ? null : { kind: "unassigned" } })}>
+                <span className="glyph muted">○</span>
+                <span className="name muted">Unassigned</span>
+                <span className="count">{unassignedCount}</span>
+              </button>
+            </div>
+          </li>
+        </ul>
       </section>
 
       <section>
@@ -308,6 +325,12 @@ export function Sidebar(p: Props) {
         <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
           <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
           Fade notes not edited recently
+        </label>
+        <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
+          <span>
+            Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
+          </span>
+          <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
         </label>
         <label className="row column">
           <span>

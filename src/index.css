@@ -32,9 +32,16 @@ button { font: inherit; color: inherit; }
   --panel-w: 420px;
   display: grid;
   grid-template-columns: var(--sidebar-w) 6px 1fr 0 0;
-  grid-template-rows: 48px 1fr;
-  grid-template-areas: "top top top top top" "side gutter stage gutter2 note";
+  grid-template-rows: 48px auto 1fr;
+  grid-template-areas: "top top top top top" "state state state state state" "side gutter stage gutter2 note";
   height: 100%;
+}
+.stateline {
+  grid-area: state;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 3px 14px; font-size: 12px; color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border-bottom: 1px solid var(--border);
 }
 .app.with-panel { grid-template-columns: var(--sidebar-w) 6px minmax(240px, 1fr) 6px min(var(--panel-w), calc(100vw - var(--sidebar-w) - 252px)); }
 .gutter-right { grid-area: gutter2; border-right: 0; border-left: 1px solid var(--border); }
@@ -231,3 +238,11 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .vault-select { font: inherit; font-weight: 700; color: var(--fg); background: none; border: 0; padding: 0; cursor: pointer; max-width: 240px; }
 .vault-select:focus { outline: none; }
 .tree-row.spotlit > .tree-line, .legend > li.spotlit > .tree-line { box-shadow: inset 3px 0 0 var(--accent); }
+.panel-nav { position: absolute; top: 8px; right: 40px; display: flex; gap: 2px; }
+.navbtn { border: 1px solid var(--border); background: var(--panel-2); color: var(--fg); border-radius: 6px; width: 24px; height: 22px; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.navbtn:disabled { opacity: .35; cursor: default; }
+.why { margin-left: 6px; }
+.why-chain { margin: -2px 0 8px; line-height: 1.7; }
+.why-chain .via { color: var(--muted); }
+.why-chain .via.weak { color: #f59e0b; }
+.tree-row.unassigned .tree-label .name { font-style: italic; }

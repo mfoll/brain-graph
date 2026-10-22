@@ -33,6 +33,12 @@ export interface GraphViewProps {
   onLayoutProgress?: (progress: number) => void;
   focusRequest: { node: string; nonce: number } | null;
   fitRequest: number;
+  /** Camera state shared across renderer instances (theme switches remount the view). */
+  cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
+  /** Refit the frame to the visible notes while the layout runs (first layout of a vault only). */
+  layoutFits: boolean;
+  /** The user dragged nodes: positions to merge into the saved layout. */
+  onPositionsChanged: (positions: Positions) => void;
 }
 
 type GS = { focusActive: boolean; labelsAlways: boolean };
@@ -117,7 +123,6 @@ export function GraphView(props: GraphViewProps) {
   const propsRef = useRef(props);
   propsRef.current = props;
   const selectedRef = useRef<string | null>(null);
-  const cameraRef = useRef<{ x: number; y: number; ratio: number; angle: number } | null>(null);
   const handledFocus = useRef<number>(0);
   const handledFit = useRef<number>(0);
 
@@ -142,6 +147,7 @@ export function GraphView(props: GraphViewProps) {
         zoomingRatio: 1.4,
         minCameraRatio: 0.02,
         maxCameraRatio: 3,
+        enableNodeDrag: true,
       },
       styles: {
         stage: { background: "rgba(0,0,0,0)" }, // the container paints the background so layers behind the stage show
@@ -213,7 +219,7 @@ export function GraphView(props: GraphViewProps) {
     sigma.on("afterRender", redrawHulls);
     (sigma as unknown as { __redrawHulls: () => void }).__redrawHulls = redrawHulls;
     // Keep the viewpoint when the graph is swapped (relationship filters rebuild it).
-    if (cameraRef.current) sigma.getCamera().setState(cameraRef.current);
+    if (propsRef.current.cameraStore.current) sigma.getCamera().setState(propsRef.current.cameraStore.current);
     if (import.meta.env.DEV) (window as unknown as { __sigma: unknown }).__sigma = sigma;
 
     const clearHighlight = () => {
@@ -266,7 +272,15 @@ export function GraphView(props: GraphViewProps) {
       restore();
       propsRef.current.onHover(null, null);
     });
-    sigma.on("clickNode", ({ node }) => propsRef.current.onSelect(node));
+    let dragged = false;
+    sigma.on("nodeDragStart", () => (dragged = false));
+    sigma.on("nodeDrag", () => (dragged = true));
+    sigma.on("nodeDragEnd", () => {
+      if (dragged) propsRef.current.onPositionsChanged(collectPositions(graph));
+    });
+    sigma.on("clickNode", ({ node }) => {
+      if (!dragged) propsRef.current.onSelect(node);
+    });
     sigma.on("clickStage", () => propsRef.current.onSelect(null));
     const onMove = (e: MouseEvent) => {
       const r = container.getBoundingClientRect();
@@ -315,7 +329,7 @@ export function GraphView(props: GraphViewProps) {
     return () => {
       container.removeEventListener("mousemove", onMove);
       ro.disconnect();
-      cameraRef.current = sigma.getCamera().getState();
+      propsRef.current.cameraStore.current = sigma.getCamera().getState();
       layout.kill();
       sigma.kill();
       sigmaRef.current = null;
@@ -328,13 +342,17 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart } = props;
+    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits } = props;
     const reset = () => Object.assign(layout, { iterations: 2, settings: { ...layout.settings, slowDown: layoutStart } });
+    // Only a first layout refits the frame; a nudge or a settle keeps the view exactly where it is.
+    const maybeFit = () => {
+      if (layoutFits) fit();
+    };
     const stop = () => {
       layout.stop();
       reset();
       if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
-      fit();
+      maybeFit();
       propsRef.current.onLayoutProgress?.(0);
       propsRef.current.onLayoutStopped(collectPositions(graph));
     };
@@ -352,7 +370,7 @@ export function GraphView(props: GraphViewProps) {
         layout.settings.slowDown = sched.slowDown;
         layout.iterations = sched.iterations;
         propsRef.current.onLayoutProgress?.(progress);
-        fit();
+        maybeFit();
       }, 250);
       const t = setTimeout(stop, layoutDuration);
       return () => {

@@ -73,15 +73,28 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
 
 const VAULT_KEY = "brain-graph.vault";
 
+type Spotlight = Filters["spotlight"];
+const spotlightToParam = (sp: Spotlight) => (!sp ? null : sp.kind === "type" ? `type:${sp.value}` : sp.kind === "hub" ? `hub:${sp.id}` : "unassigned");
+const paramToSpotlight = (v: string | null): Spotlight => {
+  if (!v) return null;
+  if (v === "unassigned") return { kind: "unassigned" };
+  if (v.startsWith("type:")) return { kind: "type", value: v.slice(5) };
+  if (v.startsWith("hub:")) return { kind: "hub", id: v.slice(4) };
+  return null;
+};
+const initialUrl = new URLSearchParams(window.location.search);
+
 export default function App() {
   const { vaults, error: vaultsError } = useVaults();
   const [vaultSlug, setVaultSlugState] = useState<string | null>(() => {
+    if (initialUrl.get("vault")) return initialUrl.get("vault");
     try {
       return localStorage.getItem(VAULT_KEY);
     } catch {
       return null;
     }
   });
+  const cameraStore = useRef<{ x: number; y: number; ratio: number; angle: number } | null>(null);
   // Resolve the initial vault once the list is known: remembered choice if still served, else the default.
   useEffect(() => {
     if (!vaults?.length) return;
@@ -150,7 +163,11 @@ export default function App() {
   const homeIndex = useMemo(() => (data && homeSettings && homeSettingsVault === data.vault.slug ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings, homeSettingsVault]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 
-  const [homeLevel, setHomeLevel] = useState<HomeLevel>(1);
+  const [homeLevel, setHomeLevel] = useState<HomeLevel>(() => {
+    const raw = initialUrl.get("level");
+    const v = raw === null ? 1 : Number(raw);
+    return v === 0 || v === 1 || v === 2 ? (v as HomeLevel) : 1;
+  });
 
   const [filters, setFilters] = useState<Filters>({
     types: new Set(),
@@ -163,6 +180,7 @@ export default function App() {
     hulls: true,
     labels: false,
     spotlight: null,
+    minDegree: 0,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -172,10 +190,17 @@ export default function App() {
       ...f,
       types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
       kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
-      spotlight: null,
+      spotlight: initialised === null ? paramToSpotlight(initialUrl.get("focus")) : null,
     }));
-    setSelected(null);
+    const urlNote = initialised === null ? initialUrl.get("note") : null;
+    setSelected(urlNote && data.nodes.some((n) => n.id === urlNote) ? urlNote : null);
+    history.current = { past: [], future: [] };
     setHovered(null);
+    if (initialised !== null) {
+      // Another vault: its map has its own frame; start from a full view instead of the previous camera.
+      cameraStore.current = null;
+      setFitRequest((n) => n + 1);
+    }
     setInitialised(data.vault.slug);
   }, [data, initialised]);
 
@@ -265,6 +290,24 @@ export default function App() {
       else if (filters.collapseSources && t === "Source") set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
     }
+    if (filters.minDegree > 0) {
+      // Skeleton view: drop notes with too few visible links, iterating since removals lower others' degrees.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        filteredGraph.forEachNode((n) => {
+          if (set.has(n) || homeIndex.hubs.has(n)) return;
+          let d = 0;
+          filteredGraph.forEachNeighbor(n, (m) => {
+            if (!set.has(m)) d++;
+          });
+          if (d < filters.minDegree) {
+            set.add(n);
+            changed = true;
+          }
+        });
+      }
+    }
     if (filters.hideOrphans) {
       filteredGraph.forEachNode((n) => {
         if (set.has(n)) return;
@@ -292,11 +335,14 @@ export default function App() {
     const set = new Set<string>();
     if (sp.kind === "type") {
       for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.value && !hidden.has(n.id)) set.add(n.id);
-    } else {
+    } else if (sp.kind === "hub") {
       for (const id of subtreeMembers(sp.id, data, homeIndex)) if (!hidden.has(id)) set.add(id);
+    } else {
+      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
     }
     return set;
   }, [filters.spotlight, data, homeIndex, hidden]);
+  const unassignedCount = useMemo(() => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.homes.get(n.id)?.hub).length : 0), [data, homeIndex]);
 
   const matches = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
@@ -307,10 +353,33 @@ export default function App() {
       .slice(0, 12);
   }, [data, query]);
 
-  const select = (id: string | null, center = false) => {
+  // Panel navigation history: every selection of a different note is a step; back/forward replay them.
+  const history = useRef<{ past: string[]; future: string[] }>({ past: [], future: [] });
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const select = (id: string | null, center = false, record = true) => {
+    if (record && id && selected && id !== selected) {
+      history.current.past.push(selected);
+      history.current.future = [];
+      setHistoryVersion((v) => v + 1);
+    }
     setSelected(id);
     if (id && center) setFocusRequest({ node: id, nonce: Date.now() });
   };
+  const goBack = () => {
+    const prev = history.current.past.pop();
+    if (!prev) return;
+    if (selected) history.current.future.push(selected);
+    setHistoryVersion((v) => v + 1);
+    select(prev, true, false);
+  };
+  const goForward = () => {
+    const next = history.current.future.pop();
+    if (!next) return;
+    if (selected) history.current.past.push(selected);
+    setHistoryVersion((v) => v + 1);
+    select(next, true, false);
+  };
+  void historyVersion;
   // Home row click: focus the group and open its note; clicking the focused group again clears both.
   const focusHub = (id: string) => {
     const already = filters.spotlight?.kind === "hub" && filters.spotlight.id === id;
@@ -318,6 +387,38 @@ export default function App() {
     if (already) setSelected(null);
     else select(id, true);
   };
+  // Escape: unfocus first, then close the panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      if (filters.spotlight) setFilters((f) => ({ ...f, spotlight: null }));
+      else if (selected) setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filters.spotlight, selected]);
+
+  // Shareable URL: vault, selected note, focus and roll-up level.
+  useEffect(() => {
+    if (!data) return;
+    const q = new URLSearchParams();
+    q.set("vault", data.vault.slug);
+    if (selected) q.set("note", selected);
+    const sp = spotlightToParam(filters.spotlight);
+    if (sp) q.set("focus", sp);
+    if (homeLevel !== 1) q.set("level", String(homeLevel));
+    const url = `${window.location.pathname}?${q.toString()}`;
+    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
+  }, [data, selected, filters.spotlight, homeLevel]);
+
+  // Dragged nodes: keep their new positions and save them with the layout.
+  const onPositionsChanged = (positions: Positions) => {
+    latestPositions.current = positions;
+    if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
+    void saved.save(positions);
+  };
+
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
   const clickGraph = (id: string | null) => {
     setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
@@ -329,6 +430,20 @@ export default function App() {
   if (!data || !graph || !filteredGraph || !homeIndex || !homeSettings) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
+  const stateParts: string[] = [];
+  if (filters.spotlight) {
+    const sp = filters.spotlight;
+    stateParts.push(`focused: ${sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : "unassigned notes"}`);
+  }
+  const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type").length;
+  if (hiddenTypes) stateParts.push(`${hiddenTypes} type${hiddenTypes > 1 ? "s" : ""} hidden`);
+  const hiddenKinds = data.edgeKinds.filter((k) => !filters.kinds.has(k.kind));
+  if (hiddenKinds.length) stateParts.push(hiddenKinds.length === 1 ? `${hiddenKinds[0].kind} links hidden` : `${hiddenKinds.length} link kinds hidden`);
+  if (filters.collapseSources) stateParts.push("Sources collapsed");
+  if (filters.minDegree) stateParts.push(`notes with < ${filters.minDegree} links hidden`);
+  if (filters.recency) stateParts.push("faded by recency");
+  if (!filters.hideArchived) stateParts.push("archived shown");
+  if (filters.focusDepth) stateParts.push(`depth ${filters.focusDepth} around selection`);
   const selectedNode = selected ? byId.get(selected) : null;
   const visibleCount = data.nodes.length - hidden.size;
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
@@ -408,6 +523,29 @@ export default function App() {
         </div>
         {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
+      {stateParts.length > 0 && (
+        <div className="stateline">
+          <span>{stateParts.join(" · ")}</span>
+          <button
+            className="link small"
+            onClick={() =>
+              setFilters((f) => ({
+                ...f,
+                spotlight: null,
+                types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
+                kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
+                collapseSources: false,
+                minDegree: 0,
+                recency: false,
+                hideArchived: true,
+                focusDepth: 0,
+              }))
+            }
+          >
+            clear
+          </button>
+        </div>
+      )}
 
       <Sidebar
         data={data}
@@ -425,6 +563,7 @@ export default function App() {
         selected={selected}
         onSelect={(id) => select(id, true)}
         onFocusHub={focusHub}
+        unassignedCount={unassignedCount}
       />
 
       <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />
@@ -453,6 +592,9 @@ export default function App() {
           onLayoutProgress={setLayoutProgress}
           focusRequest={focusRequest}
           fitRequest={fitRequest}
+          cameraStore={cameraStore}
+          layoutFits={layoutRun === "scratch"}
+          onPositionsChanged={onPositionsChanged}
         />
         {hoveredNode && pointer && (
           <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>
@@ -480,6 +622,10 @@ export default function App() {
           homeIndex={homeIndex}
           onSelect={(id) => select(id, true)}
           onClose={() => setSelected(null)}
+          canBack={history.current.past.length > 0}
+          canForward={history.current.future.length > 0}
+          onBack={goBack}
+          onForward={goForward}
         />
       )}
     </div>

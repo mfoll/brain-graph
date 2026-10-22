@@ -53,6 +53,8 @@ export interface NoteHome {
   depth: number;
   alternatives: string[];
   viaHas: boolean;
+  /** Steps from the note to its hub, nearest first: which relationship led to which note. */
+  path: { via: string; id: string }[];
 }
 
 export interface HomeIndex {
@@ -89,42 +91,50 @@ function hsl(h: number, s: number, l: number): string {
  */
 function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, NoteHome> {
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
-  const strong = new Map<string, string[]>();
-  const weak = new Map<string, string[]>();
-  const link = (map: Map<string, string[]>, child: string, parent: string) => {
-    if (child !== parent) (map.get(child) ?? map.set(child, []).get(child)!).push(parent);
+  type Parent = { id: string; via: string };
+  const strong = new Map<string, Parent[]>();
+  const both = new Map<string, Parent[]>();
+  const link = (map: Map<string, Parent[]>, child: string, parent: string, via: string) => {
+    if (child !== parent) (map.get(child) ?? map.set(child, []).get(child)!).push({ id: parent, via });
   };
   for (const e of data.edges) {
-    if (isParentKind(e.kind)) link(strong, e.source, e.target);
-    else if (e.kind === "has") link(weak, e.target, e.source);
+    if (isParentKind(e.kind)) {
+      link(strong, e.source, e.target, e.kind);
+      link(both, e.source, e.target, e.kind);
+    } else if (e.kind === "has") link(both, e.target, e.source, "has");
   }
   const isHub = (id: string) => settings.hubTypes.has(byId.get(id)?.type ?? "");
   const preferProject = settings.hubTypes.has("Project");
 
-  const walk = (start: string, parents: Map<string, string[]>): NoteHome | null => {
+  type Step = { id: string; path: Parent[] };
+  const walk = (start: string, parents: Map<string, Parent[]>): NoteHome | null => {
     const seen = new Set([start]);
-    let frontier = [start];
+    let frontier: Step[] = [{ id: start, path: [] }];
     let fallback: NoteHome | null = null;
+    const toHome = (picked: Step[], depth: number): NoteHome => ({
+      hub: picked[0].id,
+      depth,
+      alternatives: picked.slice(1).map((s) => s.id),
+      viaHas: picked[0].path.some((p) => p.via === "has"),
+      path: picked[0].path,
+    });
     for (let depth = 1; depth <= 8 && frontier.length; depth++) {
-      const next: string[] = [];
-      for (const n of frontier) for (const p of parents.get(n) ?? []) if (!seen.has(p)) { seen.add(p); next.push(p); }
-      const hubs = next.filter(isHub);
-      const projects = preferProject ? hubs.filter((id) => byId.get(id)?.type === "Project") : hubs;
-      if (projects.length) return { hub: projects[0], depth, alternatives: projects.slice(1), viaHas: parents === weak };
-      if (hubs.length && !fallback) fallback = { hub: hubs[0], depth, alternatives: hubs.slice(1), viaHas: parents === weak };
+      const next: Step[] = [];
+      for (const f of frontier) for (const p of parents.get(f.id) ?? []) if (!seen.has(p.id)) { seen.add(p.id); next.push({ id: p.id, path: [...f.path, p] }); }
+      const hubs = next.filter((s) => isHub(s.id));
+      const projects = preferProject ? hubs.filter((s) => byId.get(s.id)?.type === "Project") : hubs;
+      if (projects.length) return toHome(projects, depth);
+      if (hubs.length && !fallback) fallback = toHome(hubs, depth);
       frontier = next;
     }
     return fallback;
   };
 
   const homes = new Map<string, NoteHome>();
-  const both = new Map<string, string[]>();
-  if (settings.useHas) for (const [k, v] of strong) both.set(k, v.slice());
-  if (settings.useHas) for (const [k, v] of weak) both.set(k, [...(both.get(k) ?? []), ...v]);
   for (const n of data.nodes) {
     if (n.type === "Type") continue;
     const h = walk(n.id, strong) ?? (settings.useHas ? walk(n.id, both) : null);
-    homes.set(n.id, h ?? { hub: null, depth: 0, alternatives: [], viaHas: false });
+    homes.set(n.id, h ?? { hub: null, depth: 0, alternatives: [], viaHas: false, path: [] });
   }
   return homes;
 }
