@@ -26,6 +26,8 @@ export interface EdgeAttrs {
   kind: string;
   /** Layout pull: hierarchy links group notes around their project, body links barely count. */
   weight: number;
+  /** Visual emphasis relative to the default pull (1 = as drawn with default settings). */
+  emphasis: number;
   [key: string]: unknown;
 }
 
@@ -48,8 +50,16 @@ export interface LayoutSettings {
 }
 export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, structurePull: 4, lateralPull: 1 };
 
+/** Links that pull less are drawn thinner and lighter; emphasis is the pull relative to its default. */
 export function applyEdgeWeights(graph: BrainGraph, structurePull: number, lateralPull: number): void {
-  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, structurePull, lateralPull) }), { attributes: ["weight"] });
+  graph.updateEachEdgeAttributes(
+    (_e, a) => ({
+      ...a,
+      weight: edgeWeight(a.kind, structurePull, lateralPull),
+      emphasis: isHierarchyKind(a.kind) ? structurePull / DEFAULT_LAYOUT.structurePull : lateralPull / DEFAULT_LAYOUT.lateralPull,
+    }),
+    { attributes: ["weight", "emphasis"] },
+  );
 }
 
 /**
@@ -164,7 +174,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   }
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind) });
+      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: 1 });
     }
   }
   // Seed positions deterministically so a first layout is reproducible between reloads.

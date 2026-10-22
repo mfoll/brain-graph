@@ -233,12 +233,13 @@ export function GraphView(props: GraphViewProps) {
           {
             path: "straight",
             color: (a) => edgeStyle(a.kind).color,
-            size: (a) => edgeStyle(a.kind).width,
+            // Width and opacity follow the link's pull: a pull of 0 leaves a faint hairline, 2× the default a bold line.
+            size: (a) => edgeStyle(a.kind).width * Math.min(2, Math.max(0.35, Math.sqrt(a.emphasis ?? 1))),
             head: (a) => (edgeStyle(a.kind).directed ? "arrow" : "none"),
-            opacity: 0.55,
+            opacity: (a) => 0.55 * Math.min(1.4, Math.max(0.2, Math.sqrt(a.emphasis ?? 1))),
           },
           { when: (_a, s, gs) => gs.focusActive && !s.isHighlighted, then: { opacity: 0.02 } },
-          { whenState: "isHighlighted", then: { opacity: 1, depth: "topEdges", size: (a) => edgeStyle(a.kind).width + 0.8 } },
+          { whenState: "isHighlighted", then: { opacity: 1, depth: "topEdges", size: (a) => edgeStyle(a.kind).width * Math.min(2, Math.max(0.5, Math.sqrt(a.emphasis ?? 1))) + 0.8 } },
           { whenState: "isHidden", then: { visibility: "hidden" } },
         ],
       },
