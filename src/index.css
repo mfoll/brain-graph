@@ -284,3 +284,8 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .add-vault input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--fg); font: inherit; }
 .error-text { color: #ef4444; margin-bottom: 6px; }
 .row.buttons { gap: 6px; flex-wrap: wrap; }
+.palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+.palette { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); cursor: pointer; color: var(--muted); text-align: left; }
+.palette.on { border-color: var(--accent); color: var(--fg); box-shadow: 0 0 0 1px var(--accent) inset; }
+.palette .swatches { display: flex; gap: 2px; }
+.palette .swatches span { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }

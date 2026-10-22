@@ -8,6 +8,35 @@ export interface HomeSettings {
   hubTypes: Set<string>;
   /** Follow inverse `has` links (parent has note) when `belongs_to` alone reaches no hub. */
   useHas: boolean;
+  /** Colour palette for groups (see PALETTES). */
+  palette?: PaletteId;
+}
+
+/** Categorical palettes for the groups, biggest group first. Sub-groups take shades of their parent's hue. */
+export const PALETTES = {
+  vivid: { label: "Vivid", colors: ["#3b82f6", "#f97316", "#10b981", "#a855f7", "#eab308", "#ec4899", "#06b6d4", "#84cc16", "#6366f1", "#ef4444", "#22c55e", "#d946ef", "#0ea5e9", "#f59e0b", "#f43f5e", "#14b8a6"] },
+  tableau: { label: "Tableau 10", colors: ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"] },
+  okabe: { label: "Okabe–Ito (colour-blind safe)", colors: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#d55e00", "#56b4e9", "#f0e442", "#999999"] },
+  pastel: { label: "Pastel", colors: ["#8da0cb", "#fc8d62", "#66c2a5", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#80b1d3", "#fb8072", "#bebada", "#fdb462"] },
+  earth: { label: "Earth", colors: ["#8c510a", "#35978f", "#bf812d", "#01665e", "#dfc27d", "#80cdc1", "#543005", "#003c30", "#c7eae5", "#f6e8c3", "#7f3b08", "#2d004b"] },
+  nord: { label: "Nord", colors: ["#5e81ac", "#d08770", "#a3be8c", "#b48ead", "#ebcb8b", "#bf616a", "#88c0d0", "#81a1c1", "#8fbcbb", "#d8dee9"] },
+} as const;
+export type PaletteId = keyof typeof PALETTES;
+export const DEFAULT_PALETTE: PaletteId = "vivid";
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const m = hex.replace("#", "");
+  const r = parseInt(m.slice(0, 2), 16) / 255, g = parseInt(m.slice(2, 4), 16) / 255, b = parseInt(m.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: l * 100 };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return { h: h * 60, s: s * 100, l: l * 100 };
 }
 
 export const DEFAULT_HUB_TYPES = ["Project", "Responsibility", "Topic"];
@@ -67,8 +96,6 @@ export interface HomeIndex {
   palettes: Map<string, string>[];
 }
 
-/** Hue wheel for anchors; deeper hubs reuse the hue with lightness steps. */
-const ROOT_HUES = [210, 25, 150, 280, 50, 340, 180, 95, 245, 10, 120, 300, 200, 60, 330, 160];
 const UNHOMED = "#8b8f98";
 
 /** Sigma's WebGL colour parser wants hex, so build hex from HSL ourselves. */
@@ -196,18 +223,23 @@ function hubPalette(index: HomeIndex, level: HomeLevel): Map<string, string> {
   const anchorIds = new Set<string>();
   for (const h of index.hubs.values()) anchorIds.add(anchorAt(index, h.id, level));
   const ordered = [...anchorIds].map((id) => index.hubs.get(id)!).sort((a, b) => b.subtreeCount - a.subtreeCount || a.title.localeCompare(b.title));
-  const hueOf = new Map<string, { hue: number; sat: number }>();
-  ordered.forEach((h, i) => hueOf.set(h.id, { hue: ROOT_HUES[i % ROOT_HUES.length], sat: i < ROOT_HUES.length ? 68 : 42 }));
+  const colors = PALETTES[index.settings.palette ?? DEFAULT_PALETTE].colors;
+  const baseOf = new Map<string, { h: number; s: number; l: number }>();
+  ordered.forEach((hub, i) => {
+    const c = hexToHsl(colors[i % colors.length]);
+    // Beyond the palette's length, desaturate so repeated hues stay distinguishable.
+    baseOf.set(hub.id, i < colors.length ? c : { ...c, s: c.s * 0.55 });
+  });
   const out = new Map<string, string>();
   for (const h of index.hubs.values()) {
     const anchor = index.hubs.get(anchorAt(index, h.id, level))!;
-    const { hue, sat } = hueOf.get(anchor.id) ?? { hue: 0, sat: 0 };
+    const base = baseOf.get(anchor.id) ?? { h: 0, s: 0, l: 50 };
     const below = h.depth - anchor.depth; // 0 at the anchor itself
     const siblings = h.parent ? index.hubs.get(h.parent)!.children : [];
     const idx = siblings.indexOf(h.id);
     const spread = below > 0 && siblings.length > 1 ? (idx / (siblings.length - 1)) * 2 - 1 : 0;
-    const light = below === 0 ? 48 : Math.max(30, Math.min(74, 54 + spread * 16 + (below - 1) * 6));
-    out.set(h.id, hsl(hue, sat, light));
+    const light = below === 0 ? base.l : Math.max(28, Math.min(78, base.l + spread * 14 + (below - 1) * 6));
+    out.set(h.id, hsl(base.h, base.s, light));
   }
   return out;
 }

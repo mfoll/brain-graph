@@ -3,7 +3,7 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
-import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
+import { DEFAULT_PALETTE, PALETTES, buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { VaultManager } from "./components/VaultManager";
 
@@ -160,8 +160,8 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`brain-graph.grouping.${data.vault.slug}`);
       if (raw) {
-        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean };
-        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false };
+        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string };
+        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE };
       }
     } catch {
       /* ignore */
@@ -172,7 +172,7 @@ export default function App() {
   const setHomeSettings = (next: HomeSettings) => {
     setHomeSettingsState(next);
     try {
-      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas }));
+      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE }));
     } catch {
       /* ignore */
     }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
-import { SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
+import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type PaletteId } from "../graph/home";
 import { DEFAULT_LAYOUT, isHierarchyKind, type LayoutSettings } from "../graph/build";
 
 export interface Filters {
@@ -471,6 +471,24 @@ export function Sidebar(p: Props) {
 
           <Section id="appearance" title="Appearance" open={!collapsed.has("appearance")} onToggle={toggleSection}>
             <div className="muted small hint">How the graph is drawn; nothing here moves or hides a note.</div>
+            <div className="row column" title="Colours of the groups, biggest group first; sub-groups take shades of their parent's hue. Regions and names follow.">
+              <span>Palette</span>
+              <div className="palette-grid">
+                {(Object.keys(PALETTES) as PaletteId[]).map((id) => {
+                  const on = (homeSettings.palette ?? DEFAULT_PALETTE) === id;
+                  return (
+                    <button key={id} className={`palette${on ? " on" : ""}`} onClick={() => p.onHomeSettings({ ...homeSettings, palette: id })} title={PALETTES[id].label}>
+                      <span className="swatches">
+                        {PALETTES[id].colors.slice(0, 8).map((c) => (
+                          <span key={c} style={{ background: c }} />
+                        ))}
+                      </span>
+                      <span className="small">{PALETTES[id].label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="row column" title="How far up the hierarchy a note takes its colour from.">
               <span>
                 Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
