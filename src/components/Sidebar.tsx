@@ -23,6 +23,8 @@ export interface Filters {
   hulls: boolean;
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
+  /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
+  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | null;
 }
 
 interface Props {
@@ -99,6 +101,10 @@ export function Sidebar(p: Props) {
     onChange({ ...filters, [key]: new Set(on ? all : []) });
   };
   const isolate = (id: string) => onChange({ ...filters, subtree: filters.subtree === id ? null : id });
+  const spotHub = (id: string) => onChange({ ...filters, spotlight: filters.spotlight?.kind === "hub" && filters.spotlight.id === id ? null : { kind: "hub", id } });
+  const spotType = (value: string) => onChange({ ...filters, spotlight: filters.spotlight?.kind === "type" && filters.spotlight.value === value ? null : { kind: "type", value } });
+  const hubSpot = (id: string) => filters.spotlight?.kind === "hub" && filters.spotlight.id === id;
+  const typeSpot = (value: string) => filters.spotlight?.kind === "type" && filters.spotlight.value === value;
 
   const instancesOf = (type: string): NoteNode[] =>
     data.nodes.filter((n) => (n.type ?? "(untyped)") === type).sort((a, b) => b.inDegree + b.outDegree - (a.inDegree + a.outDegree) || a.title.localeCompare(b.title));
@@ -109,7 +115,7 @@ export function Sidebar(p: Props) {
     const open = openHubs.has(id);
     const isolated = filters.subtree === id;
     return (
-      <li key={id} className={`tree-row${isolated ? " isolated" : ""}${selected === id ? " selected" : ""}`} data-hub={id}>
+      <li key={id} className={`tree-row${isolated ? " isolated" : ""}${selected === id ? " selected" : ""}${hubSpot(id) ? " spotlit" : ""}`} data-hub={id}>
         <div className="tree-line" style={{ paddingLeft: hub.depth * 12 }}>
           <button className={`disclosure${hub.children.length ? "" : " empty"}`} onClick={() => setOpenHubs(toggleIn(openHubs, id))} aria-label={open ? "Collapse" : "Expand"}>
             {hub.children.length ? (open ? "▾" : "▸") : ""}
@@ -122,6 +128,9 @@ export function Sidebar(p: Props) {
             )}
             <span className="name">{hub.title}</span>
             <span className="count">{hub.subtreeCount}</span>
+          </button>
+          <button className={`iso${hubSpot(id) ? " on" : ""}`} onClick={() => spotHub(id)} title={hubSpot(id) ? "Stop highlighting this group" : "Highlight every note of this group and fade the rest"}>
+            {hubSpot(id) ? "unfocus" : "focus"}
           </button>
           <button className={`iso${isolated ? " on" : ""}`} onClick={() => isolate(id)} title={isolated ? "Show all notes again" : "Hide every note outside this group (the view does not move)"}>
             {isolated ? "all" : "only"}
@@ -200,6 +209,11 @@ export function Sidebar(p: Props) {
         <header>
           <h2>Types</h2>
           <span className="header-tools">
+            {filters.spotlight?.kind === "type" && (
+              <button className="link small" onClick={() => onChange({ ...filters, spotlight: null })}>
+                unfocus
+              </button>
+            )}
             <span className="muted small">
               <button className="link" onClick={() => setAll("types", true)}>all</button> ·{" "}
               <button className="link" onClick={() => setAll("types", false)}>none</button>
@@ -217,7 +231,7 @@ export function Sidebar(p: Props) {
             const items = open ? instancesOf(t.name) : [];
             const limit = showAll.has(t.name) ? items.length : 40;
             return (
-              <li key={t.name} className={on ? "" : "off"}>
+              <li key={t.name} className={`${on ? "" : "off"}${typeSpot(t.name) ? " spotlit" : ""}`}>
                 <div className="tree-line">
                   <button className="disclosure" onClick={() => setOpenTypes(toggleIn(openTypes, t.name))} aria-label={open ? "Collapse" : "Expand"}>
                     {open ? "▾" : "▸"}
@@ -226,6 +240,9 @@ export function Sidebar(p: Props) {
                     {colorMode === "type" ? <span className="swatch" style={{ background: typeColors.get(t.name) }} /> : <span className="glyph muted">{glyphFor(t.name)}</span>}
                     <span className="name">{t.name}</span>
                     <span className="count">{t.count}</span>
+                  </button>
+                  <button className={`iso${typeSpot(t.name) ? " on" : ""}`} onClick={() => spotType(t.name)} title={typeSpot(t.name) ? "Stop highlighting this type" : "Highlight every note of this type and fade the rest"}>
+                    {typeSpot(t.name) ? "unfocus" : "focus"}
                   </button>
                 </div>
                 {open && (

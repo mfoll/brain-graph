@@ -22,6 +22,8 @@ export interface GraphViewProps {
   hulls: Omit<HullOptions, "dim" | "halo"> | null;
   /** Show note labels for all nodes (density-managed); otherwise only on hover / selection. */
   showLabels: boolean;
+  /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
+  spotlight: Set<string> | null;
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
   onLayoutStopped: (positions: Positions) => void;
@@ -101,6 +103,8 @@ type Helpers = {
   __highlight: (n: string) => void;
   __clear: () => void;
   __fit: () => void;
+  /** Re-apply whatever should be lit when nothing is hovered: the selection, else the spotlight, else nothing. */
+  __restore: () => void;
 };
 
 export function GraphView(props: GraphViewProps) {
@@ -233,14 +237,30 @@ export function GraphView(props: GraphViewProps) {
       sigma.setGraphState({ focusActive: true });
     };
 
+    const spotlightAll = (set: Set<string>) => {
+      clearHighlight();
+      const nodes = [...set].filter((n) => graph.hasNode(n));
+      const edges: string[] = [];
+      graph.forEachEdge((edge, _a, source, target) => {
+        if (set.has(source) && set.has(target)) edges.push(edge);
+      });
+      sigma.setNodesState(nodes, { isHighlighted: true });
+      sigma.setEdgesState(edges, { isHighlighted: true });
+      highlightedRef.current = { nodes, edges };
+      sigma.setGraphState({ focusActive: true });
+    };
+    const restore = () => {
+      const { selected, spotlight } = propsRef.current;
+      if (selected && graph.hasNode(selected)) highlight(selected);
+      else if (spotlight) spotlightAll(spotlight);
+      else clearHighlight();
+    };
     sigma.on("enterNode", ({ node, event }) => {
       highlight(node);
       propsRef.current.onHover(node, { x: event.x, y: event.y });
     });
     sigma.on("leaveNode", () => {
-      const sel = propsRef.current.selected;
-      if (sel && graph.hasNode(sel)) highlight(sel);
-      else clearHighlight();
+      restore();
       propsRef.current.onHover(null, null);
     });
     sigma.on("clickNode", ({ node }) => propsRef.current.onSelect(node));
@@ -287,6 +307,7 @@ export function GraphView(props: GraphViewProps) {
     ext.__highlight = highlight;
     ext.__clear = clearHighlight;
     ext.__fit = fitToVisible;
+    ext.__restore = restore;
 
     return () => {
       container.removeEventListener("mousemove", onMove);
@@ -367,11 +388,9 @@ export function GraphView(props: GraphViewProps) {
     const prev = selectedRef.current;
     if (prev && props.graph.hasNode(prev)) real.setNodeState(prev, { isSelected: false });
     selectedRef.current = props.selected;
-    if (props.selected && props.graph.hasNode(props.selected)) {
-      real.setNodeState(props.selected, { isSelected: true });
-      sigma.__highlight(props.selected);
-    } else sigma.__clear();
-  }, [props.selected, props.graph, props.hidden]);
+    if (props.selected && props.graph.hasNode(props.selected)) real.setNodeState(props.selected, { isSelected: true });
+    sigma.__restore();
+  }, [props.selected, props.graph, props.hidden, props.spotlight]);
 
   // Label policy. The label grid is only rebuilt on render, so refresh explicitly; while all labels
   // are requested, let more of them through than the hover-only default allows.

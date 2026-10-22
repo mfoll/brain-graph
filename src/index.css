@@ -228,3 +228,4 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .grouping-line { display: flex; align-items: baseline; justify-content: space-between; padding-right: 6px; }
 .vault-select { font: inherit; font-weight: 700; color: var(--fg); background: none; border: 0; padding: 0; cursor: pointer; max-width: 240px; }
 .vault-select:focus { outline: none; }
+.tree-row.spotlit > .tree-line, .legend > li.spotlit > .tree-line { box-shadow: inset 3px 0 0 var(--accent); }

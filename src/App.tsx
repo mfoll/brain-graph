@@ -164,6 +164,7 @@ export default function App() {
     recency: false,
     hulls: true,
     labels: false,
+    spotlight: null,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -174,6 +175,7 @@ export default function App() {
       types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
       kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
       subtree: null,
+      spotlight: null,
     }));
     setSelected(null);
     setHovered(null);
@@ -287,6 +289,19 @@ export default function App() {
     }
     return set;
   }, [filteredGraph, data, homeIndex, filters, selected]);
+
+  // Notes to keep lit when a type or a home group is focused in the sidebar (hidden ones excluded).
+  const spotlight = useMemo(() => {
+    const sp = filters.spotlight;
+    if (!sp || !data || !homeIndex) return null;
+    const set = new Set<string>();
+    if (sp.kind === "type") {
+      for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.value && !hidden.has(n.id)) set.add(n.id);
+    } else {
+      for (const id of subtreeMembers(sp.id, data, homeIndex)) if (!hidden.has(id)) set.add(id);
+    }
+    return set;
+  }, [filters.spotlight, data, homeIndex, hidden]);
 
   const matches = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
@@ -423,6 +438,7 @@ export default function App() {
           theme={theme.graph}
           hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
           showLabels={filters.labels}
+          spotlight={spotlight}
           onHover={(node, pos) => {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);
