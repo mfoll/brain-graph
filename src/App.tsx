@@ -3,7 +3,7 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
-import { DEFAULT_PALETTE, PALETTES, buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings, type PaletteId } from "./graph/home";
+import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { VaultManager } from "./components/VaultManager";
 
@@ -559,6 +559,9 @@ export default function App() {
   if (!data || !graph || !filteredGraph || !homeIndex || !homeSettings) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
+  // Colour as drawn on the map (the note's group); the type is shown as a neutral tag with its shape.
+  const mapColor = (id: string) => (filteredGraph.hasNode(id) ? (filteredGraph.getNodeAttribute(id, "color") as string) : undefined);
+  const typeTag = (type: string | null) => `${SHAPE_GLYPH[shapeFor(type, homeSettings)]} ${type ?? "untyped"}`;
   // Deviations from the default view, each with its own undo. Defaults themselves (body links hidden,
   // archived hidden) are not listed, so an empty line means "the default view".
   const defaultKinds = (k: string) => k !== "body";
@@ -644,9 +647,9 @@ export default function App() {
                       setQuery("");
                     }}
                   >
-                    <span className="dot" style={{ background: typeColors.get(m.type ?? "(untyped)") }} />
+                    <span className="dot" style={{ background: mapColor(m.id) }} />
                     <span className="name">{m.title}</span>
-                    <span className="muted small">{m.type}</span>
+                    <span className="muted small">{typeTag(m.type)}</span>
                   </button>
                 </li>
               ))}
@@ -770,14 +773,22 @@ export default function App() {
         />
         {hoveredNode && pointer && (
           <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>
-            <div className="type-chip" style={{ background: typeColors.get(hoveredNode.type ?? "(untyped)") }}>{hoveredNode.type ?? "untyped"}</div>
+            <div className="tip-head">
+              <span className="type-tag">{typeTag(hoveredNode.type)}</span>
+              {(() => {
+                const h = homeIndex.homes.get(hoveredNode.id)?.hub;
+                const groupId = homeIndex.hubs.has(hoveredNode.id) ? hoveredNode.id : h;
+                return groupId ? (
+                  <span className="group-tag">
+                    <span className="dot" style={{ background: mapColor(hoveredNode.id) }} />
+                    {byId.get(groupId)?.title ?? groupId}
+                  </span>
+                ) : null;
+              })()}
+            </div>
             <strong>{hoveredNode.title}</strong>
             <div className="muted small">
               {hoveredNode.status ?? "—"} · {hoveredNode.inDegree} in · {hoveredNode.outDegree} out
-              {(() => {
-                const h = homeIndex.homes.get(hoveredNode.id)?.hub;
-                return h && h !== hoveredNode.id ? ` · ${byId.get(h)?.title ?? h}` : "";
-              })()}
             </div>
             {hoveredNode.summary && <p>{hoveredNode.summary}</p>}
           </div>

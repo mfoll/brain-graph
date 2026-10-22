@@ -3,7 +3,7 @@ import type { NoteNode, VaultGraph } from "../types";
 import { NoteReader } from "./NoteReader";
 import type { BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
-import { homeChain, subtreeMembers, type HomeIndex } from "../graph/home";
+import { SHAPE_GLYPH, homeChain, shapeFor, subtreeMembers, type HomeIndex } from "../graph/home";
 
 interface Props {
   data: VaultGraph;
@@ -24,7 +24,7 @@ export function deepLink(data: VaultGraph, id: string): string {
   return `tolaria://${data.vault.slug}/${id.split("/").map(encodeURIComponent).join("/")}.md`;
 }
 
-export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward }: Props) {
+export function NotePanel({ data, graph, node, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward }: Props) {
   const chain = homeChain(node, homeIndex).filter((id) => id !== node.id).reverse(); // root first
   const noteHome = homeIndex.homes.get(node.id);
   const isHub = homeIndex.hubs.has(node.id);
@@ -63,7 +63,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
                   .map((n) => (
                     <li key={n.id}>
                       <button className="link note-link" onClick={() => onSelect(n.id)}>
-                        <span className="dot" style={{ background: typeColors.get(n.type ?? "(untyped)") }} />
+                        <span className="dot" style={{ background: graph.hasNode(n.id) ? (graph.getNodeAttribute(n.id, "color") as string) : undefined }} />
                         {n.title}
                       </button>
                     </li>
@@ -88,7 +88,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
         {ordered.map(([type, notes]) => (
           <div key={type} className="rel-group">
             <div className="rel-kind">
-              <span className="dot" style={{ background: typeColors.get(type) }} /> {type} <span className="count">{notes.length}</span>
+              <span className="glyph muted">{SHAPE_GLYPH[shapeFor(type, homeIndex.settings)]}</span> {type} <span className="count">{notes.length}</span>
             </div>
             <ul>
               {notes
@@ -96,7 +96,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
                 .map((n) => (
                   <li key={n.id}>
                     <button className="link note-link" onClick={() => onSelect(n.id)}>
-                      {homeIndex.hubs.has(n.id) ? <span className="glyph muted">◆</span> : <span className="dot" style={{ background: typeColors.get(type), opacity: 0.5 }} />}
+                      <span className="dot" style={{ background: graph.hasNode(n.id) ? (graph.getNodeAttribute(n.id, "color") as string) : undefined, opacity: homeIndex.hubs.has(n.id) ? 1 : 0.6 }} />
                       {n.title}
                     </button>
                   </li>
@@ -115,7 +115,9 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
         <button className="navbtn" onClick={onForward} disabled={!canForward} title="Forward" aria-label="Forward">›</button>
         <button className="navbtn close" onClick={onClose} title="Close (Esc)" aria-label="Close">×</button>
       </div>
-      <div className="type-chip" style={{ background: typeColors.get(typeName) }}>{typeName}</div>
+      <div className="type-tag">
+        {SHAPE_GLYPH[shapeFor(node.type, homeIndex.settings)]} {typeName}
+      </div>
       <h2>{node.title}</h2>
       <div className="meta">
         {node.status && <span className="pill">{node.status}</span>}
