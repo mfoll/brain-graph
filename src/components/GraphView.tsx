@@ -274,18 +274,33 @@ export function GraphView(props: GraphViewProps) {
       restore();
       propsRef.current.onHover(null, null);
     });
-    let dragged = false;
-    sigma.on("nodeDragStart", () => (dragged = false));
-    sigma.on("nodeDrag", () => (dragged = true));
+    // Sigma reports a "drag" for any press on a node, so tell a click from a move by displacement.
+    let pressed: { node: string; x: number; y: number } | null = null;
+    let movedRecently = false;
+    const movedFar = (node: string) => {
+      if (!pressed || pressed.node !== node || !graph.hasNode(node)) return false;
+      const a = graph.getNodeAttributes(node);
+      const v0 = sigma.graphToViewport({ x: pressed.x, y: pressed.y });
+      const v1 = sigma.graphToViewport({ x: a.x, y: a.y });
+      return Math.hypot(v1.x - v0.x, v1.y - v0.y) > 4;
+    };
+    sigma.on("nodeDragStart", ({ node }) => {
+      const a = graph.getNodeAttributes(node);
+      pressed = { node, x: a.x, y: a.y };
+      movedRecently = false;
+    });
     sigma.on("nodeDragEnd", ({ node }) => {
-      if (dragged) propsRef.current.onPositionsChanged(collectPositions(graph), node);
+      if (movedFar(node)) {
+        movedRecently = true;
+        propsRef.current.onPositionsChanged(collectPositions(graph), node);
+      }
     });
     sigma.on("clickNode", ({ node }) => {
-      if (!dragged) propsRef.current.onSelect(node);
+      if (!movedFar(node)) propsRef.current.onSelect(node);
     });
     // Releasing a dragged node must not count as a click on the background.
     sigma.on("clickStage", () => {
-      if (dragged) return void (dragged = false);
+      if (movedRecently) return void (movedRecently = false);
       propsRef.current.onSelect(null);
     });
     const onMove = (e: MouseEvent) => {
@@ -429,6 +444,14 @@ export function GraphView(props: GraphViewProps) {
     if (props.selected && props.graph.hasNode(props.selected)) real.setNodeState(props.selected, { isSelected: true });
     sigma.__restore();
   }, [props.selected, props.graph, props.hidden, props.spotlight]);
+
+  // Physics changed while a run is going: apply at once so the effect is visible immediately.
+  useEffect(() => {
+    const layout = layoutRef.current;
+    if (!layout || !layout.isRunning()) return;
+    const ls = props.layoutSettings;
+    Object.assign(layout.settings, { scalingRatio: ls.spread, gravity: ls.gravity, linLogMode: ls.separateGroups, adjustSizes: ls.preventOverlap });
+  }, [props.layoutSettings]);
 
   // Label policy. The label grid is only rebuilt on render, so refresh explicitly. While all labels
   // are requested, or while a type / group is focused (its notes are the only lit ones), let more

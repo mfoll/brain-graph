@@ -28,10 +28,10 @@ function useTheme() {
 
 // Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
 const LAYOUT_RUNS = {
-  scratch: { duration: 8000, start: 8 },
-  recompute: { duration: 4000, start: 30 },
-  relayout: { duration: 8000, start: 12 }, // after changing the physics: longer, from the current positions
-  settle: { duration: 2500, start: 30 },
+  scratch: { duration: 6000, start: 8 },
+  recompute: { duration: 3000, start: 30 },
+  tune: { duration: 3000, start: 10 }, // live preview after a physics change, from the current positions
+  settle: { duration: 2000, start: 30 },
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
@@ -75,12 +75,22 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
 const VAULT_KEY = "brain-graph.vault";
 
 type Spotlight = Filters["spotlight"];
-const spotlightToParam = (sp: Spotlight) => (!sp ? null : sp.kind === "type" ? `type:${sp.value}` : sp.kind === "hub" ? `hub:${sp.id}` : "unassigned");
+const spotlightToParam = (sp: Spotlight) => {
+  if (!sp) return null;
+  if (sp.kind === "type") return `type:${sp.value}`;
+  if (sp.kind === "hub") return `hub:${sp.id}`;
+  if (sp.kind === "facet") return `facet:${sp.type}:${sp.key}:${sp.value}`;
+  return "unassigned";
+};
 const paramToSpotlight = (v: string | null): Spotlight => {
   if (!v) return null;
   if (v === "unassigned") return { kind: "unassigned" };
   if (v.startsWith("type:")) return { kind: "type", value: v.slice(5) };
   if (v.startsWith("hub:")) return { kind: "hub", id: v.slice(4) };
+  if (v.startsWith("facet:")) {
+    const [type, key, ...rest] = v.slice(6).split(":");
+    if (type && key && rest.length) return { kind: "facet", type, key, value: rest.join(":") };
+  }
   return null;
 };
 const initialUrl = new URLSearchParams(window.location.search);
@@ -229,6 +239,8 @@ export default function App() {
     setLayoutSettingsState(next);
     setLayoutSettingsVault(data.vault.slug);
   }, [data, layoutSettingsVault]);
+  // Changing the physics starts (or extends) a short live run so the effect shows at once.
+  const tuneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setLayoutSettings = (next: LayoutSettings) => {
     setLayoutSettingsState(next);
     try {
@@ -236,6 +248,11 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    if (tuneTimer.current) clearTimeout(tuneTimer.current);
+    tuneTimer.current = setTimeout(() => {
+      setLayoutRun(null);
+      setTimeout(() => setLayoutRun("tune"), 0);
+    }, 150);
   };
 
   // A restored map needs no layout; new notes get a short settling run with everything else pinned.
@@ -368,6 +385,8 @@ export default function App() {
       for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.value && !hidden.has(n.id)) set.add(n.id);
     } else if (sp.kind === "hub") {
       for (const id of subtreeMembers(sp.id, data, homeIndex)) if (!hidden.has(id)) set.add(id);
+    } else if (sp.kind === "facet") {
+      for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.type && String(n.properties[sp.key] ?? "") === sp.value && !hidden.has(n.id)) set.add(n.id);
     } else {
       for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
     }
@@ -464,7 +483,9 @@ export default function App() {
   const stateParts: string[] = [];
   if (filters.spotlight) {
     const sp = filters.spotlight;
-    stateParts.push(`focused: ${sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : "unassigned notes"}`);
+    stateParts.push(
+      `focused: ${sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : "unassigned notes"}`,
+    );
   }
   const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type").length;
   if (hiddenTypes) stateParts.push(`${hiddenTypes} type${hiddenTypes > 1 ? "s" : ""} hidden`);
@@ -597,7 +618,6 @@ export default function App() {
         unassignedCount={unassignedCount}
         layoutSettings={layoutSettings}
         onLayoutSettings={setLayoutSettings}
-        onRelayout={() => setLayoutRun(layoutRun ? null : "relayout")}
         layoutRunning={layoutRun !== null}
       />
 
@@ -629,7 +649,7 @@ export default function App() {
           focusRequest={focusRequest}
           fitRequest={fitRequest}
           cameraStore={cameraStore}
-          layoutFits={layoutRun === "scratch" || layoutRun === "relayout"}
+          layoutFits={layoutRun === "scratch"}
           onPositionsChanged={onPositionsChanged}
         />
         {hoveredNode && pointer && (

@@ -246,3 +246,6 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .why-chain .via { color: var(--muted); }
 .why-chain .via.weak { color: #f59e0b; }
 .tree-row.unassigned .tree-label .name { font-style: italic; }
+.facets { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px 26px; }
+.facets .chip .count { font-size: 10px; margin-left: 2px; color: inherit; opacity: .75; }
+.facet-select { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }

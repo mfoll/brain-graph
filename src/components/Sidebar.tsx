@@ -19,7 +19,7 @@ export interface Filters {
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
   /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
-  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "unassigned" } | null;
+  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "unassigned" } | null;
   /** Hide notes with fewer visible links than this (group notes are always kept). 0 = off. */
   minDegree: number;
 }
@@ -46,7 +46,6 @@ interface Props {
   unassignedCount: number;
   layoutSettings: LayoutSettings;
   onLayoutSettings: (s: LayoutSettings) => void;
-  onRelayout: () => void;
   layoutRunning: boolean;
 }
 
@@ -56,6 +55,40 @@ export function Sidebar(p: Props) {
   const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
   const ls = layoutSettings;
   const layoutIsDefault = JSON.stringify(ls) === JSON.stringify(DEFAULT_LAYOUT);
+
+  // Facets: scalar frontmatter keys shared by enough notes and with few distinct values (a status, a
+  // kind, a period), not identifiers or URLs; `status` first when present.
+  const facetKeys = (() => {
+    const counts = new Map<string, number>();
+    const values = new Map<string, Set<string>>();
+    for (const n of data.nodes) {
+      for (const [k, v] of Object.entries(n.properties)) {
+        if (k === "type" || k.startsWith("_") || (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean")) continue;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+        (values.get(k) ?? values.set(k, new Set()).get(k)!).add(String(v));
+      }
+    }
+    const min = Math.max(5, data.nodes.length * 0.05);
+    const keys = [...counts.entries()]
+      .filter(([k, c]) => c >= min && (values.get(k)?.size ?? 0) <= 25 && (values.get(k)?.size ?? 0) < c / 2)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => k);
+    if (keys.includes("status")) return ["status", ...keys.filter((k) => k !== "status")];
+    return keys;
+  })();
+  const [facetKey, setFacetKey] = useState<string>(() => facetKeys[0] ?? "status");
+  const facetsOf = (type: string): [string, number][] => {
+    const counts = new Map<string, number>();
+    for (const n of data.nodes) {
+      if ((n.type ?? "(untyped)") !== type) continue;
+      const v = n.properties[facetKey];
+      if (v === undefined || v === null || v === "") continue;
+      counts.set(String(v), (counts.get(String(v)) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  const facetSpot = (type: string, value: string) => filters.spotlight?.kind === "facet" && filters.spotlight.type === type && filters.spotlight.key === facetKey && filters.spotlight.value === value;
+  const spotFacet = (type: string, value: string) => onChange({ ...filters, spotlight: facetSpot(type, value) ? null : { kind: "facet", type, key: facetKey, value } });
   const unassignedSpot = filters.spotlight?.kind === "unassigned";
   const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
   const [showGrouping, setShowGrouping] = useState(false);
@@ -220,10 +253,19 @@ export function Sidebar(p: Props) {
         <header>
           <h2>Types</h2>
           <span className="header-tools">
-            {filters.spotlight?.kind === "type" && (
+            {(filters.spotlight?.kind === "type" || filters.spotlight?.kind === "facet") && (
               <button className="link small" onClick={() => onChange({ ...filters, spotlight: null })}>
                 unfocus
               </button>
+            )}
+            {facetKeys.length > 1 && (
+              <select className="facet-select" value={facetKey} onChange={(e) => setFacetKey(e.target.value)} title="Frontmatter key whose values are listed under each type">
+                {facetKeys.map((k) => (
+                  <option key={k} value={k}>
+                    by {k}
+                  </option>
+                ))}
+              </select>
             )}
             {types.some((t) => !filters.types.has(t.name)) && (
               <button className="link small" onClick={() => setAll("types", true)} title="Show every hidden type again">
@@ -256,6 +298,15 @@ export function Sidebar(p: Props) {
                     {on ? "hide" : "hidden"}
                   </button>
                 </div>
+                {open && facetsOf(t.name).length > 0 && (
+                  <div className="facets">
+                    {facetsOf(t.name).map(([value, count]) => (
+                      <button key={value} className={`chip${facetSpot(t.name, value) ? " on" : ""}`} onClick={() => spotFacet(t.name, value)} title={`Focus ${t.name} notes with ${facetKey} = ${value}`}>
+                        {value} <span className="count">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {open && (
                   <ul className="instances">
                     {items.slice(0, limit).map((n) => (
@@ -320,7 +371,7 @@ export function Sidebar(p: Props) {
             )}
           </span>
         </header>
-        <div className="muted small hint">Changes apply on the next run. Groups form because hierarchy links pull harder than lateral ones; spread and gravity set how far everything sits apart.</div>
+        <div className="muted small hint">Changes apply live in a short run. Groups form because hierarchy links pull harder than lateral ones; spread and gravity set how far everything sits apart.</div>
         <label className="row column" title="Repulsion between notes (ForceAtlas2 scalingRatio).">
           <span>
             Spread: <strong>{ls.spread}</strong>
@@ -347,11 +398,6 @@ export function Sidebar(p: Props) {
           <input type="checkbox" checked={ls.preventOverlap} onChange={(e) => onLayoutSettings({ ...ls, preventOverlap: e.target.checked })} />
           Prevent overlap
         </label>
-        <div className="row">
-          <button className="button" onClick={p.onRelayout} title="Run the layout for 8 seconds from the current positions with these settings, then save.">
-            {p.layoutRunning ? "Stop" : "Re-run layout (8 s)"}
-          </button>
-        </div>
       </section>
 
       <section>
