@@ -115,7 +115,7 @@ Issues and pull requests are welcome. Keep vault assumptions configurable rather
 | [Tolaria](https://tolaria.md/) ([source](https://github.com/refactoringhq/tolaria)) | Local-first desktop app for Markdown vaults with typed notes and relationships, Git sync and an MCP server for agents. | The viewer Brain Graph is built for: same files, same conventions, deep links back into it. Tolaria has no graph view and no plugin system yet. |
 | [Portent](https://github.com/refactoringhq/portent) | Refactoring's open specification for portable knowledge bases: core types, relationships and lifecycle. | Supplies the vocabulary Brain Graph reads: `type`, `belongs_to`, `has`, `related_to`. |
 | [Second Brain template](https://github.com/mfoll/second-brain-template) | A Portent vault template with agent operating rules, Procedures, ADRs and lint audits, including a `belongs_to` hierarchy contract. | Brain Graph is its visual companion: the grouping rules match the template's hierarchy contract, and the audit views and `graph:homes` feed its lint and health review. |
-| [Obsidian graph view](https://help.obsidian.md/plugins/graph) | The built-in graph of an Obsidian vault, based on body links. | Zero-setup fallback for any Markdown folder, without frontmatter relationships, types or hierarchy. |
+| [Obsidian graph view](https://obsidian.md/help/plugins/graph) | The built-in graph of an Obsidian vault, based on body links. | Zero-setup fallback for any Markdown folder, without frontmatter relationships, types or hierarchy. |
 | [Quartz](https://quartz.jzhao.xyz/), [Foam](https://foambubble.github.io/) | A static-site generator and a VS Code extension, each with a link graph. | Need their own build or editor and read body links only. |
 
 ## Status
