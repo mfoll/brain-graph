@@ -260,3 +260,8 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .section-head .count { font-size: 11px; }
 .sidebar section.collapsed { margin-bottom: 8px; }
 .sidebar section.collapsed header { margin-bottom: 0; }
+.chips-inline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.state-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); font-size: 12px; }
+.state-chip.stale { border-color: #f59e0b; color: #b45309; }
+.chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 999px; }
+.chip-x:hover { background: var(--panel-2); color: var(--fg); }

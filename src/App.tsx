@@ -491,22 +491,36 @@ export default function App() {
   if (!data || !graph || !filteredGraph || !homeIndex || !homeSettings) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
-  const stateParts: string[] = [];
+  // Deviations from the default view, each with its own undo. Defaults themselves (body links hidden,
+  // archived hidden) are not listed, so an empty line means "the default view".
+  const defaultKinds = (k: string) => k !== "body";
+  const stateParts: { label: string; title: string; clear: () => void }[] = [];
   if (filters.spotlight) {
     const sp = filters.spotlight;
-    stateParts.push(
-      `focused: ${sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : "unassigned notes"}`,
-    );
+    const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : "unassigned notes";
+    stateParts.push({ label: `focused: ${what}`, title: "Everything else is faded. Click × to unfocus.", clear: () => setFilters((f) => ({ ...f, spotlight: null })) });
   }
-  const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type").length;
-  if (hiddenTypes) stateParts.push(`${hiddenTypes} type${hiddenTypes > 1 ? "s" : ""} hidden`);
-  const hiddenKinds = data.edgeKinds.filter((k) => !filters.kinds.has(k.kind));
-  if (hiddenKinds.length) stateParts.push(hiddenKinds.length === 1 ? `${hiddenKinds[0].kind} links hidden` : `${hiddenKinds.length} link kinds hidden`);
-  if (filters.collapseSources) stateParts.push("Sources collapsed");
-  if (filters.minDegree) stateParts.push(`notes with < ${filters.minDegree} links hidden`);
-  if (filters.recency) stateParts.push("faded by recency");
-  if (!filters.hideArchived) stateParts.push("archived shown");
-  if (filters.focusDepth) stateParts.push(`depth ${filters.focusDepth} around selection`);
+  const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type");
+  if (hiddenTypes.length)
+    stateParts.push({
+      label: hiddenTypes.length === 1 ? `${hiddenTypes[0].name} hidden` : `${hiddenTypes.length} types hidden`,
+      title: `Hidden: ${hiddenTypes.map((t) => t.name).join(", ")}. Click × to show them again.`,
+      clear: () => setFilters((f) => ({ ...f, types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")) })),
+    });
+  const hiddenKinds = data.edgeKinds.filter((k) => !filters.kinds.has(k.kind) && defaultKinds(k.kind));
+  const shownBody = filters.kinds.has("body");
+  if (hiddenKinds.length)
+    stateParts.push({
+      label: hiddenKinds.length === 1 ? `${hiddenKinds[0].kind} links hidden` : `${hiddenKinds.length} link kinds hidden`,
+      title: `Hidden: ${hiddenKinds.map((k) => k.kind).join(", ")}. Click × to show them again.`,
+      clear: () => setFilters((f) => ({ ...f, kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => defaultKinds(k) || f.kinds.has(k))) })),
+    });
+  if (shownBody) stateParts.push({ label: "body links shown", title: "Wikilinks in note bodies are drawn (hidden by default). Click × to hide them.", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
+  if (filters.collapseSources) stateParts.push({ label: "Sources collapsed", title: "Source notes are folded into a +N count on their parent.", clear: () => setFilters((f) => ({ ...f, collapseSources: false })) });
+  if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
+  if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
+  if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
+  if (filters.focusDepth) stateParts.push({ label: `depth ${filters.focusDepth} around selection`, title: "Only the selected note's neighbourhood is shown.", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });
   const kindsChanged = layoutKinds.current !== null && (layoutKinds.current.size !== filters.kinds.size || [...filters.kinds].some((k) => !layoutKinds.current!.has(k)));
   const selectedNode = selected ? byId.get(selected) : null;
   const visibleCount = data.nodes.length - hidden.size;
@@ -589,38 +603,29 @@ export default function App() {
       </header>
       {(stateParts.length > 0 || kindsChanged) && (
         <div className="stateline">
-          <span>
-            {stateParts.join(" · ")}
+          <span className="chips-inline">
+            {stateParts.map((part) => (
+              <span key={part.label} className="state-chip" title={part.title}>
+                {part.label}
+                <button className="chip-x" onClick={part.clear} aria-label={`Undo: ${part.label}`} title={part.title}>
+                  ×
+                </button>
+              </span>
+            ))}
             {kindsChanged && (
-              <>
-                {stateParts.length > 0 && " · "}
-                <span title="The visible link kinds changed since the last layout run; the positions still reflect the previous set.">
-                  links changed since the last layout ·{" "}
-                  <button className="link small" onClick={() => void recompute(false)}>
-                    recompute
-                  </button>
-                </span>
-              </>
+              <span className="state-chip stale" title="The visible link kinds changed since the last layout run; the positions still reflect the previous set.">
+                links changed since the last layout ·{" "}
+                <button className="link small" onClick={() => void recompute(false)}>
+                  recompute
+                </button>
+              </span>
             )}
           </span>
-          <button
-            className="link small"
-            onClick={() =>
-              setFilters((f) => ({
-                ...f,
-                spotlight: null,
-                types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
-                kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
-                collapseSources: false,
-                minDegree: 0,
-                recency: false,
-                hideArchived: true,
-                focusDepth: 0,
-              }))
-            }
-          >
-            clear
-          </button>
+          {stateParts.length > 1 && (
+            <button className="link small" title="Back to the default view: nothing focused, all types and relationship links shown, body links hidden, archived hidden" onClick={() => stateParts.forEach((p) => p.clear())}>
+              reset view
+            </button>
+          )}
         </div>
       )}
 
