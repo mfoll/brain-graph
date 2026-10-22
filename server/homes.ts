@@ -67,7 +67,7 @@ if (asJson) {
   console.log(`# Home hierarchy (hub types: ${[...hubTypes].join(", ")}; has as parent: ${useHas})\n`);
   for (const r of roots.sort((a, b) => (children.get(b.id)?.length ?? 0) - (children.get(a.id)?.length ?? 0))) print(r.id, 0);
 
-  console.log("\n# Projects whose parent is a Topic (expected: a Responsibility or an umbrella Project)");
+  console.log("\n# Projects whose parent is a Topic (convention check: in Tolaria's template Topics are lateral context, so a Project usually belongs to a Responsibility or an umbrella Project)");
   for (const n of hubs) { const h = homes.get(n.id); if (n.type === "Project" && h?.hub && byId.get(h.hub)?.type === "Topic") console.log(`- ${n.title} → ${title(h.hub)} (${n.id}.md)`); }
 
   console.log("\n# Notes with more than one parent hub at the same distance (first listed wins)");

@@ -35,5 +35,6 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.4"
   },
-  "description": "Interactive graph view of a Tolaria / Markdown Second Brain vault, coloured by note Type."
+  "description": "Interactive graph view of a Markdown note vault (Tolaria-style frontmatter types and wikilink relationships), coloured and grouped by the project or responsibility each note belongs to.",
+  "license": "MIT"
 }

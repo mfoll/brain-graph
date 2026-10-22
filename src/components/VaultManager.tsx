@@ -65,7 +65,7 @@ export function VaultManager({ registry, current, onSelect, onAdd, onRemove, onU
           {registry.vaults.length === 0 && <li className="muted small">No vault yet. Add a folder below.</li>}
         </ul>
         <div className="add-vault">
-          <input type="text" placeholder="Folder path, e.g. ~/Second-Brain" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void add()} />
+          <input type="text" placeholder="Folder path, e.g. ~/my-vault" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void add()} />
           <input type="text" placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void add()} />
           <button className="button primary" onClick={() => void add()} disabled={busy || !path.trim()}>
             Add folder

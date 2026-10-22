@@ -192,7 +192,7 @@ export default function App() {
     hideArchived: true,
     hideOrphans: false,
     focusDepth: 0,
-    collapseSources: false,
+    collapseType: null,
     recency: false,
     hulls: true,
     names: true,
@@ -207,7 +207,7 @@ export default function App() {
   useEffect(() => {
     if (!data || initialised === data.vault.slug) return;
     // View filters are remembered per vault; types or kinds that no longer exist are dropped, new ones shown.
-    let remembered: Partial<Omit<Filters, "types" | "kinds">> & { hiddenTypes?: string[]; hiddenKinds?: string[] } = {};
+    let remembered: Partial<Omit<Filters, "types" | "kinds">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseSources?: boolean } = {};
     try {
       remembered = JSON.parse(localStorage.getItem(`brain-graph.view.${data.vault.slug}`) ?? "{}");
     } catch {
@@ -220,7 +220,7 @@ export default function App() {
       hideArchived: remembered.hideArchived ?? true,
       hideOrphans: remembered.hideOrphans ?? false,
       focusDepth: 0,
-      collapseSources: remembered.collapseSources ?? false,
+      collapseType: remembered.collapseType ?? (remembered.collapseSources ? "Source" : null),
       recency: remembered.recency ?? false,
       hulls: remembered.hulls ?? true,
       names: remembered.names ?? true,
@@ -364,9 +364,10 @@ export default function App() {
   useEffect(() => {
     if (!filteredGraph || !graph) return;
     const sourceCount = new Map<string, number>();
-    if (filters.collapseSources) {
+    if (filters.collapseType) {
+      const ct = filters.collapseType;
       graph.forEachEdge((_e, a, s, t) => {
-        if (a.kind === "belongs_to" && graph.getNodeAttribute(s, "type") === "Source") sourceCount.set(t, (sourceCount.get(t) ?? 0) + 1);
+        if (a.kind === "belongs_to" && graph.getNodeAttribute(s, "type") === ct) sourceCount.set(t, (sourceCount.get(t) ?? 0) + 1);
       });
     }
     const now = Date.now();
@@ -384,7 +385,7 @@ export default function App() {
       },
       { attributes: ["label", "recency"] },
     );
-  }, [filteredGraph, graph, byId, filters.collapseSources, filters.recency]);
+  }, [filteredGraph, graph, byId, filters.collapseType, filters.recency]);
 
   const hidden = useMemo(() => {
     const set = new Set<string>();
@@ -392,7 +393,7 @@ export default function App() {
     for (const n of data.nodes) {
       const t = n.type ?? "(untyped)";
       if (!filters.types.has(t)) set.add(n.id);
-      else if (filters.collapseSources && t === "Source") set.add(n.id);
+      else if (filters.collapseType && t === filters.collapseType) set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
     }
     if (filters.minDegree > 0) {
@@ -450,6 +451,24 @@ export default function App() {
     }
     return set;
   }, [filters.spotlight, data, homeIndex, hidden]);
+  // Candidates for collapsing: types with enough notes, biggest first, with the share of their notes
+  // that are leaves in the current view (at most two visible links) as a hint.
+  const leafTypes = useMemo(() => {
+    if (!data || !filteredGraph) return [];
+    const stats = new Map<string, { count: number; leaves: number }>();
+    for (const n of data.nodes) {
+      const t = n.type ?? "(untyped)";
+      if (t === "Type") continue;
+      const st = stats.get(t) ?? { count: 0, leaves: 0 };
+      st.count++;
+      if (filteredGraph.hasNode(n.id) && filteredGraph.degree(n.id) <= 2) st.leaves++;
+      stats.set(t, st);
+    }
+    return [...stats.entries()]
+      .map(([type, st]) => ({ type, count: st.count, leafShare: st.leaves / st.count }))
+      .filter((t) => t.count >= 10)
+      .sort((a, b) => b.count - a.count);
+  }, [data, filteredGraph]);
   const unassignedCount = useMemo(
     () => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub).length : 0),
     [data, homeIndex],
@@ -592,7 +611,7 @@ export default function App() {
       clear: () => setFilters((f) => ({ ...f, kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => defaultKinds(k) || f.kinds.has(k))) })),
     });
   if (shownBody) stateParts.push({ label: "body links shown", title: "Wikilinks in note bodies are drawn (hidden by default). Click × to hide them.", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
-  if (filters.collapseSources) stateParts.push({ label: "Sources collapsed", title: "Source notes are folded into a +N count on their parent.", clear: () => setFilters((f) => ({ ...f, collapseSources: false })) });
+  if (filters.collapseType) stateParts.push({ label: `${filters.collapseType} collapsed`, title: `${filters.collapseType} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseType: null })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
@@ -724,6 +743,7 @@ export default function App() {
         homeIndex={homeIndex}
         homeSettings={homeSettings}
         homeDefaults={vaultDefaults}
+        leafTypes={leafTypes}
         onHomeSettings={setHomeSettings}
         homeLevel={homeLevel}
         onHomeLevel={setHomeLevel}

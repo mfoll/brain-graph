@@ -55,7 +55,7 @@ type GS = { focusActive: boolean; labelsAlways: boolean; linkOpacity: number };
 // ForceAtlas2 never "finishes": nodes keep jittering around their equilibrium, and its adaptive
 // global speed defeats any damping applied to the positions it returns. So instead of the worker
 // supervisor we step the synchronous layout a few iterations per animation frame (about 3 ms each
-// for this vault). Each call starts from a fresh speed state, which makes `slowDown` a direct lever
+// for a thousand-note vault). Each call starts from a fresh speed state, which makes `slowDown` a direct lever
 // on the step size: the run goes at full speed first, then slowDown grows exponentially and motion
 // dies out before the time box ends.
 const COOL_FACTOR = 400; // slowDown multiplier reached at the end of the run

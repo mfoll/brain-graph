@@ -112,8 +112,8 @@ function hsl(h: number, s: number, l: number): string {
 /**
  * Roll every note up to its nearest hub. Parent links are `belongs_to` (note -> parent); the
  * inverse of `has` is used only as a fallback when `belongs_to` reaches no hub at all, because
- * this vault uses `has` for selective entry points, which would otherwise pull notes into the
- * wrong project. When Project is a hub type, the first Project met wins; otherwise the nearest
+ * vaults commonly use `has` for selective entry points rather than ownership, which would otherwise
+ * pull notes into the wrong group. When Project is a hub type, the first Project met wins; otherwise the nearest
  * hub of any selected type.
  */
 function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, NoteHome> {

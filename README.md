@@ -2,9 +2,9 @@
 
 Interactive graph view of a Markdown Second Brain vault (Tolaria-style: frontmatter `type`, wikilink relationships), rendered in WebGL, with notes coloured and grouped by the project or responsibility they belong to.
 
-![The work vault with group regions, coloured by nearest group, related_to links hidden](docs/brain-graph-second-brain.webp)
+![A 1,300-note vault with group regions, coloured by nearest group, related_to links hidden](docs/brain-graph-second-brain.webp)
 
-Tolaria has no graph view and no plugin system (maintainer answer in refactoringhq/tolaria#587), so this is a standalone companion that reads the vault folder directly.
+Tolaria has no graph view and no plugin system (maintainer answer in refactoringhq/tolaria#587), so this is a standalone companion that reads the vault folder directly. It works with any folder of Markdown notes whose frontmatter has a `type` and wikilink relationships; Tolaria itself is optional. A vault with no project-like types shows grey nodes until you pick which types act as groups in Settings → Grouping.
 
 ## What it shows
 
@@ -19,13 +19,13 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 - Shareable URL: `?vault=…&note=…&focus=hub:genesis|type:Question|unassigned&level=0|2` is kept up to date, so a Tolaria note or an agent report can link straight into a view.
 - A **Layout physics** section exposes gravity and the structure-over-lateral ratio (1–10, default 6): a structure link (belongs_to, has, parent_*) pulls that many times harder than a lateral one (related_to, custom keys; body wikilinks at 40 %), and lateral links are drawn thinner and lighter as the ratio grows (full at 1, half at 6, a tenth at 10); Appearance also has a global link opacity, remembered per vault and applied live in a 0.75-second run so the effect is visible at once. Nodes cannot be dragged: hand placement does not survive the next layout run.
 - Type facets: an expanded Type row lists the values of a frontmatter key found on its notes (`status` first; other keys qualify only when shared by at least three types, carried by a tenth of the notes and holding few distinct values), each clickable to focus those notes, e.g. Questions with `status = Open`. Nothing is specific to one vault's vocabulary.
-- Toggles: hide archived, hide orphans, hide notes with fewer than N visible links (skeleton view; group notes always stay), collapse Sources into a `+N` count on their parent, fade notes by time since last edit (7 / 30 / 90 days).
+- Toggles: hide archived, hide orphans, hide notes with fewer than N visible links (skeleton view; group notes always stay), collapse one leaf type (sources, references…) into a `+N` count on its parent, fade notes by time since last edit (7 / 30 / 90 days).
 - One edge per relationship. Every frontmatter key whose value contains wikilinks is a relationship (the Tolaria rule): `belongs_to`, `has`, `related_to`, `surface_for` and custom keys such as `source_note` or `wraps`. Body wikilinks are a separate, thinner `body` kind, hidden by default.
 - Hover: tooltip with type, status, link counts and the note's first paragraph; neighbours stay lit, the rest fades.
 - Click: detail panel with summary, outgoing and incoming relationships grouped by kind, frontmatter, **Open in Tolaria** (`tolaria://<vault-slug>/<path>.md`) and copy-wikilink.
 - Sidebar: toggle types and relationship kinds (Alt-click isolates one), hide archived notes, hide orphans, and a focus-depth slider that keeps only the selected note's neighbourhood.
 - Search box with Enter to jump.
-- Layout: ForceAtlas2 stepped a few iterations per animation frame (about 3 ms each for 1,300 notes), damped from the first frame and cooled exponentially so nodes come to rest within the run: 8 s and five steps per frame for a first layout (well over a thousand steps), 0.75 s and two steps per frame for a nudge, a settle of new notes or a physics change. **Update layout** in the header nudges the map from the current positions (0.75 s); **Reset layout** in Settings → Layout redoes it from scratch (8 s); **Stop** keeps the positions of the moment.
+- Layout: ForceAtlas2 stepped a few iterations per animation frame (about 3 ms each for a thousand notes), damped from the first frame and cooled exponentially so nodes come to rest within the run: 8 s and five steps per frame for a first layout (well over a thousand steps), 0.75 s and two steps per frame for a nudge, a settle of new notes or a physics change. **Update layout** in the header nudges the map from the current positions (0.75 s); **Reset layout** in Settings → Layout redoes it from scratch (8 s); **Stop** keeps the positions of the moment.
 - Live reload: the dev server watches the vault and re-parses on change.
 - During a layout run the physics keeps its natural scale and the frame follows the map smoothly; when the run ends, positions are normalised once to a fixed extent (so saved maps are comparable, node sizes stay constant, and **Fit** is a smooth camera move back to the full view). Normalising on every frame was tried and rejected: it fights ForceAtlas2's natural scale and collapses the map into a ball.
 - Stable map: node positions are saved to `.tmp/layouts/<vault-slug>.json` when a layout run stops (or you pause it). The next start restores them without running the layout; only new notes get a short settling run, placed next to their linked notes while everything else stays pinned. **Reset layout** forgets the saved positions.
@@ -45,12 +45,12 @@ Other commands:
 
 ```bash
 pnpm typecheck
-pnpm graph:dump ~/Second-Brain -- --summary   # parser statistics and unresolved links
-pnpm graph:homes ~/Second-Brain               # the inferred group hierarchy plus audit lists
-                                              # (--no-has, --hubs=Project,Topic, --json)
+pnpm graph:dump ~/my-vault -- --summary   # parser statistics and unresolved links
+pnpm graph:homes ~/my-vault               # the inferred group hierarchy plus audit lists
+                                          # (--no-has, --hubs=Project,Topic, --json)
 ```
 
-`graph:homes` prints the hierarchy the viewer infers and four audit lists: Projects whose parent is a Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. It is meant as input for reorganising `belongs_to` in the vault; the viewer never writes to the vault.
+`graph:homes` prints the hierarchy the viewer infers and four audit lists: Projects whose parent is a Topic (a convention check for Tolaria's template, where Topics are lateral), notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. It is meant as input for reorganising `belongs_to` in a vault; the viewer never writes to the vault.
 
 ## How it works
 
@@ -60,4 +60,8 @@ pnpm graph:homes ~/Second-Brain               # the inferred group hierarchy plu
 
 ## Status
 
-Prototype (October 2026). Vaults are shown one at a time; cross-vault links are not drawn (there are almost none as wikilinks; the vaults reference each other through Source pointers). Hulls are a 2D canvas layer behind the WebGL stage (the stage background is transparent and the container paints it). Known gaps: the Tolaria deep-link slug is inferred from the vault label (verified for the work vault), not read from Tolaria's registry.
+Prototype (October 2026). Vaults are shown one at a time; cross-vault links are not drawn. Hulls are a 2D canvas layer behind the WebGL stage (the stage background is transparent and the container paints it). Known gaps: the Tolaria deep-link slug is inferred from the vault label, not read from Tolaria's registry.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).

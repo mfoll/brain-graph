@@ -10,8 +10,8 @@ export interface Filters {
   hideArchived: boolean;
   hideOrphans: boolean;
   focusDepth: number; // 0 = whole graph
-  /** Hide Source notes and show their count on the parent note's label. */
-  collapseSources: boolean;
+  /** Hide the notes of this type and show their count on the parent note's label (null = off). */
+  collapseType: string | null;
   /** Fade notes by time since last edit. */
   recency: boolean;
   /** Tinted region behind each home group. */
@@ -36,8 +36,10 @@ interface Props {
   typeColors: Map<string, string>;
   homeIndex: HomeIndex;
   homeSettings: HomeSettings;
-  /** Default hub types for this vault (depends on its ontology). */
+  /** Default hub types for the current vault (depends on its ontology). */
   homeDefaults: string[];
+  /** Types ordered from most leaf-like (many notes, almost all with a single link) to least. */
+  leafTypes: { type: string; count: number; leafShare: number }[];
   onHomeSettings: (s: HomeSettings) => void;
   homeLevel: HomeLevel;
   onHomeLevel: (level: HomeLevel) => void;
@@ -87,7 +89,7 @@ function Section({ id, title, badge, tools, open, onToggle, children }: SectionP
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
+  const { data, types, homeIndex, homeSettings, homeDefaults, leafTypes, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
   const ls = layoutSettings;
   const layoutIsDefault = JSON.stringify({ ...ls, nodeScale: 1 }) === JSON.stringify(DEFAULT_LAYOUT);
 
@@ -415,7 +417,7 @@ export function Sidebar(p: Props) {
           >
             <div className="muted small hint">
               Types that act as groups, each drawn with its own shape in the order picked; other notes are circles. A note joins the nearest group reached through its <code>belongs_to</code> (or{" "}
-              <code>parent_*</code>) chain. Default for this vault: {homeDefaults.join(", ")}.
+              <code>parent_*</code>) chain. Suggested for this vault's types: {homeDefaults.join(", ")}.
             </div>
             <div className="chips">
               {types
@@ -427,7 +429,7 @@ export function Sidebar(p: Props) {
                   </button>
                 ))}
             </div>
-            <label className="row" title="Tolaria treats `has` as the inverse of `belongs_to`. This vault uses it for selective entry points, so it is only followed when belongs_to reaches no group.">
+            <label className="row" title="Tolaria treats `has` as the inverse of `belongs_to`, but vaults often use it for selective entry points rather than ownership, so it is only followed when belongs_to reaches no group.">
               <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
               Fall back to <code>has</code> links
             </label>
@@ -543,9 +545,16 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
               Hide orphans (no visible links)
             </label>
-            <label className="row" title="Sources are mostly leaves. Fold them into a +N count on the note they belong to.">
-              <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />
-              Collapse Sources into their parent
+            <label className="row column" title="Fold the notes of one type into a +N count on the note they belong to. Useful for a type that is mostly leaves, such as sources or references; the list is ordered by how leaf-like each type is.">
+              <span>Collapse a leaf type into its parent</span>
+              <select className="facet-select wide" value={filters.collapseType ?? ""} onChange={(e) => onChange({ ...filters, collapseType: e.target.value || null })}>
+                <option value="">— none —</option>
+                {leafTypes.map((t) => (
+                  <option key={t.type} value={t.type}>
+                    {t.type} · {t.count} notes · {Math.round(t.leafShare * 100)}% leaves
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
               <span>
