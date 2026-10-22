@@ -200,6 +200,7 @@ export default function App() {
     spotlight: null,
     minDegree: 0,
     regionSize: 1,
+    linkOpacity: 0.55,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -226,6 +227,7 @@ export default function App() {
       labels: remembered.labels ?? false,
       minDegree: remembered.minDegree ?? 0,
       regionSize: remembered.regionSize ?? 1,
+      linkOpacity: remembered.linkOpacity ?? 0.55,
       types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
       kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => !hiddenKinds.has(k))),
       spotlight: initialised === null ? paramToSpotlight(initialUrl.get("focus")) : null,
@@ -750,6 +752,7 @@ export default function App() {
           theme={theme.graph}
           hulls={filters.hulls || filters.names ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize, regions: filters.hulls, names: filters.names } : null}
           showLabels={filters.labels}
+          linkOpacity={filters.linkOpacity}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}
           onHover={(node, pos) => {

@@ -48,8 +48,8 @@ export interface LayoutSettings {
 }
 export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, ratio: 6 };
 
-/** Lateral links are drawn lighter as the ratio grows: emphasis 1 at ratio 1, 0.2 at the default ratio of 6. */
-export const lateralEmphasis = (ratio: number) => Math.pow(ratio, -0.9);
+/** Visual weight of lateral links by ratio: 1 at ratio 1 (same as structure), 0.5 at the default 6, 0.1 at 10. */
+export const lateralEmphasis = (ratio: number) => 0.1 + 0.9 * Math.max(0, Math.min(1, (10 - ratio) / 9));
 
 export function applyEdgeWeights(graph: BrainGraph, ratioInput: number): void {
   const ratio = Number.isFinite(ratioInput) && ratioInput > 0 ? ratioInput : DEFAULT_LAYOUT.ratio;

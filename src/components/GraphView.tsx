@@ -29,6 +29,8 @@ export interface GraphViewProps {
   hulls: Omit<HullOptions, "dim" | "halo"> | null;
   /** Show note labels for all nodes (density-managed); otherwise only on hover / selection. */
   showLabels: boolean;
+  /** Base opacity of links (0.1–1). */
+  linkOpacity: number;
   /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
   spotlight: Set<string> | null;
   /** Focused group whose name is always drawn. */
@@ -48,7 +50,7 @@ export interface GraphViewProps {
   cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
 }
 
-type GS = { focusActive: boolean; labelsAlways: boolean };
+type GS = { focusActive: boolean; labelsAlways: boolean; linkOpacity: number };
 
 // ForceAtlas2 never "finishes": nodes keep jittering around their equilibrium, and its adaptive
 // global speed defeats any damping applied to the positions it returns. So instead of the worker
@@ -176,7 +178,7 @@ export function GraphView(props: GraphViewProps) {
     const { graph, theme } = propsRef.current;
 
     const sigma = new Sigma<NodeAttrs, EdgeAttrs, Record<string, unknown>, NS, {}, GS>(graph, container, {
-      customGraphState: { focusActive: false, labelsAlways: propsRef.current.showLabels },
+      customGraphState: { focusActive: false, labelsAlways: propsRef.current.showLabels, linkOpacity: propsRef.current.linkOpacity },
       // Sigma only registers the circle by default; declare the shapes used for note types.
       primitives: { nodes: { shapes: [sdfCircle(), sdfSquare(), sdfDiamond(), sdfTriangle(), sdfRectangle()] } },
       customNodeState: { isSelected: false },
@@ -233,13 +235,13 @@ export function GraphView(props: GraphViewProps) {
           {
             path: "straight",
             color: (a) => edgeStyle(a.kind).color,
-            // Width and opacity follow the link's pull: a pull of 0 leaves a faint hairline, 2× the default a bold line.
-            size: (a) => edgeStyle(a.kind).width * Math.min(2, Math.max(0.35, Math.sqrt(a.emphasis ?? 1))),
+            // Width and opacity follow the link's visual weight (lateral links fade as the ratio grows) and the global link opacity.
+            size: (a) => edgeStyle(a.kind).width * Math.max(0.35, a.emphasis ?? 1),
             head: (a) => (edgeStyle(a.kind).directed ? "arrow" : "none"),
-            opacity: (a) => 0.55 * Math.min(1.4, Math.max(0.2, Math.sqrt(a.emphasis ?? 1))),
+            opacity: (a, _s, gs) => gs.linkOpacity * (a.emphasis ?? 1),
           },
           { when: (_a, s, gs) => gs.focusActive && !s.isHighlighted, then: { opacity: 0.02 } },
-          { whenState: "isHighlighted", then: { opacity: 1, depth: "topEdges", size: (a) => edgeStyle(a.kind).width * Math.min(2, Math.max(0.5, Math.sqrt(a.emphasis ?? 1))) + 0.8 } },
+          { whenState: "isHighlighted", then: { opacity: 1, depth: "topEdges", size: (a) => edgeStyle(a.kind).width * Math.max(0.5, a.emphasis ?? 1) + 0.8 } },
           { whenState: "isHidden", then: { visibility: "hidden" } },
         ],
       },
@@ -507,11 +509,11 @@ export function GraphView(props: GraphViewProps) {
     const sigma = sigmaRef.current;
     if (!sigma) return;
     const dense = props.showLabels || !!props.spotlight;
-    sigma.setGraphState({ labelsAlways: props.showLabels });
+    sigma.setGraphState({ labelsAlways: props.showLabels, linkOpacity: props.linkOpacity });
     sigma.setSetting("labelDensity", dense ? 1.4 : 0.5);
     sigma.setSetting("labelRenderedSizeThreshold", dense ? 3 : 7);
     sigma.refresh();
-  }, [props.showLabels, props.spotlight, props.graph]);
+  }, [props.showLabels, props.spotlight, props.graph, props.linkOpacity]);
 
   // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
   useEffect(() => {

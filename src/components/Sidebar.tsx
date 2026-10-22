@@ -26,6 +26,8 @@ export interface Filters {
   minDegree: number;
   /** Group region size multiplier. */
   regionSize: number;
+  /** Base opacity of links. */
+  linkOpacity: number;
 }
 
 interface Props {
@@ -480,6 +482,12 @@ export function Sidebar(p: Props) {
                 Node size: <strong>{ls.nodeScale}×</strong>
               </span>
               <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
+            </label>
+            <label className="row column" title="Base opacity of every link. Lateral links are further lightened by the structure-over-lateral ratio.">
+              <span>
+                Link opacity: <strong>{Math.round(filters.linkOpacity * 100)}%</strong>
+              </span>
+              <input type="range" min={0.1} max={1} step={0.05} value={filters.linkOpacity} onChange={(e) => onChange({ ...filters, linkOpacity: Number(e.target.value) })} />
             </label>
             <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
               <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
