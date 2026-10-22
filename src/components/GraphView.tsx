@@ -17,6 +17,8 @@ export interface GraphViewProps {
   layoutDuration: number;
   /** Initial ForceAtlas2 slowDown: ~8 from scratch, ~16 to nudge an existing map. */
   layoutStart: number;
+  /** Cap on a node's displacement per frame at the start of the run (graph units). */
+  layoutMaxStep: number;
   /** User-tunable physics. */
   layoutSettings: LayoutSettings;
   theme: { background: string; label: string; labelHalo: string };
@@ -39,8 +41,6 @@ export interface GraphViewProps {
   cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
   /** Refit the frame to the visible notes while the layout runs (first layout of a vault only). */
   layoutFits: boolean;
-  /** The user dragged a node: new positions to merge into the layout, and which node moved. */
-  onPositionsChanged: (positions: Positions, dragged: string) => void;
 }
 
 type GS = { focusActive: boolean; labelsAlways: boolean };
@@ -56,13 +56,17 @@ const COOL_FACTOR = 400; // slowDown multiplier reached at the end of the run
 // from scratch, higher when nudging an existing map) and cools from the first frame, so there is
 // no fast "shaking" phase. Displacement per second is step size x iterations per second, so the
 // iteration rate also drops from two per frame to one.
-function scheduleAt(progress: number, start: number): { slowDown: number; iterations: number } {
-  return { slowDown: start * COOL_FACTOR ** progress ** 1.4, iterations: progress < 0.3 ? 2 : 1 };
+// Besides the exponential damping, each node's displacement per frame is capped (`maxStep`, in graph
+// units, shrinking with progress), which removes the jumpy first frames when forces are large.
+function scheduleAt(progress: number, start: number, maxStep: number): { slowDown: number; iterations: number; maxStep: number } {
+  return { slowDown: start * COOL_FACTOR ** progress ** 1.2, iterations: 1, maxStep: maxStep * (1 - progress) ** 1.5 + 0.02 };
 }
 
 interface LayoutRunner {
   settings: ReturnType<typeof forceAtlas2.inferSettings>;
   iterations: number;
+  /** Maximum displacement of a node per frame, in graph units (Infinity = uncapped). */
+  maxStep: number;
   start(): void;
   stop(): void;
   isRunning(): boolean;
@@ -72,8 +76,10 @@ interface LayoutRunner {
 function createLayoutRunner(graph: BrainGraph): LayoutRunner {
   let frame: number | null = null;
   let running = false;
+  const before = new Map<string, [number, number]>();
   const runner: LayoutRunner = {
-    iterations: 2,
+    iterations: 1,
+    maxStep: Infinity,
     settings: {
       ...forceAtlas2.inferSettings(graph),
       gravity: 1,
@@ -90,7 +96,27 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
       running = true;
       const step = () => {
         if (!running) return;
+        const cap = runner.maxStep;
+        if (Number.isFinite(cap)) {
+          before.clear();
+          graph.forEachNode((n, a) => before.set(n, [a.x, a.y]));
+        }
         forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
+        if (Number.isFinite(cap)) {
+          graph.updateEachNodeAttributes(
+            (n, a) => {
+              const b = before.get(n);
+              if (!b) return a;
+              const dx = a.x - b[0];
+              const dy = a.y - b[1];
+              const d = Math.hypot(dx, dy);
+              if (d <= cap) return a;
+              const k = cap / d;
+              return { ...a, x: b[0] + dx * k, y: b[1] + dy * k };
+            },
+            { attributes: ["x", "y"] },
+          );
+        }
         frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
@@ -149,7 +175,7 @@ export function GraphView(props: GraphViewProps) {
         zoomingRatio: 1.4,
         minCameraRatio: 0.02,
         maxCameraRatio: 3,
-        enableNodeDrag: true,
+        enableNodeDrag: false,
       },
       styles: {
         stage: { background: "rgba(0,0,0,0)" }, // the container paints the background so layers behind the stage show
@@ -274,35 +300,8 @@ export function GraphView(props: GraphViewProps) {
       restore();
       propsRef.current.onHover(null, null);
     });
-    // Sigma reports a "drag" for any press on a node, so tell a click from a move by displacement.
-    let pressed: { node: string; x: number; y: number } | null = null;
-    let movedRecently = false;
-    const movedFar = (node: string) => {
-      if (!pressed || pressed.node !== node || !graph.hasNode(node)) return false;
-      const a = graph.getNodeAttributes(node);
-      const v0 = sigma.graphToViewport({ x: pressed.x, y: pressed.y });
-      const v1 = sigma.graphToViewport({ x: a.x, y: a.y });
-      return Math.hypot(v1.x - v0.x, v1.y - v0.y) > 4;
-    };
-    sigma.on("nodeDragStart", ({ node }) => {
-      const a = graph.getNodeAttributes(node);
-      pressed = { node, x: a.x, y: a.y };
-      movedRecently = false;
-    });
-    sigma.on("nodeDragEnd", ({ node }) => {
-      if (movedFar(node)) {
-        movedRecently = true;
-        propsRef.current.onPositionsChanged(collectPositions(graph), node);
-      }
-    });
-    sigma.on("clickNode", ({ node }) => {
-      if (!movedFar(node)) propsRef.current.onSelect(node);
-    });
-    // Releasing a dragged node must not count as a click on the background.
-    sigma.on("clickStage", () => {
-      if (movedRecently) return void (movedRecently = false);
-      propsRef.current.onSelect(null);
-    });
+    sigma.on("clickNode", ({ node }) => propsRef.current.onSelect(node));
+    sigma.on("clickStage", () => propsRef.current.onSelect(null));
     const onMove = (e: MouseEvent) => {
       const r = container.getBoundingClientRect();
       propsRef.current.onHover(undefined as unknown as null, { x: e.clientX - r.left, y: e.clientY - r.top });
@@ -363,10 +362,11 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits, layoutSettings: ls } = props;
+    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits, layoutMaxStep, layoutSettings: ls } = props;
     const reset = () =>
       Object.assign(layout, {
-        iterations: 2,
+        iterations: 1,
+        maxStep: layoutMaxStep,
         settings: {
           ...layout.settings,
           slowDown: layoutStart,
@@ -398,9 +398,10 @@ export function GraphView(props: GraphViewProps) {
       const started = performance.now();
       const tick = setInterval(() => {
         const progress = Math.min(1, (performance.now() - started) / layoutDuration);
-        const sched = scheduleAt(progress, layoutStart);
+        const sched = scheduleAt(progress, layoutStart, layoutMaxStep);
         layout.settings.slowDown = sched.slowDown;
         layout.iterations = sched.iterations;
+        layout.maxStep = sched.maxStep;
         propsRef.current.onLayoutProgress?.(progress);
         maybeFit();
       }, 250);

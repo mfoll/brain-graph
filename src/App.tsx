@@ -27,11 +27,12 @@ function useTheme() {
 }
 
 // Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
+// Short, damped from the first frame: almost all the useful movement happens early anyway.
 const LAYOUT_RUNS = {
-  scratch: { duration: 6000, start: 8 },
-  recompute: { duration: 3000, start: 30 },
-  tune: { duration: 3000, start: 10 }, // live preview after a physics change, from the current positions
-  settle: { duration: 2000, start: 30 },
+  scratch: { duration: 4000, start: 14, maxStep: 3 },
+  recompute: { duration: 1500, start: 30, maxStep: 0.8 },
+  tune: { duration: 1500, start: 30, maxStep: 0.8 }, // live preview after a physics change, from the current positions
+  settle: { duration: 1500, start: 30, maxStep: 1.5 },
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
@@ -466,13 +467,6 @@ export default function App() {
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
   }, [data, selected, filters.spotlight, homeLevel]);
 
-  // A dragged node simply keeps its new place (saved with the layout).
-  const onPositionsChanged = (positions: Positions) => {
-    latestPositions.current = positions;
-    if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
-    void saved.save(positions);
-  };
-
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
   const clickGraph = (id: string | null) => {
     setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
@@ -568,7 +562,7 @@ export default function App() {
             title={
               layoutRun
                 ? "Stop now and keep the current positions"
-                : "Nudge the layout from the current positions (about 4 s, cools down and saves by itself). Alt-click to start again from scratch."
+                : "Nudge the layout from the current positions (1.5 s, cools down and saves by itself). Alt-click to start again from scratch."
             }
           >
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
@@ -637,6 +631,7 @@ export default function App() {
           layoutPins={layoutPins}
           layoutDuration={run.duration}
           layoutStart={run.start}
+          layoutMaxStep={run.maxStep}
           layoutSettings={layoutSettings}
           theme={theme.graph}
           hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
@@ -654,7 +649,6 @@ export default function App() {
           fitRequest={fitRequest}
           cameraStore={cameraStore}
           layoutFits={layoutRun === "scratch"}
-          onPositionsChanged={onPositionsChanged}
         />
         {hoveredNode && pointer && (
           <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>
