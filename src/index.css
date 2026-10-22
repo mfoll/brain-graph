@@ -249,3 +249,14 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .facets { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px 26px; }
 .facets .chip .count { font-size: 10px; margin-left: 2px; color: inherit; opacity: .75; }
 .facet-select { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+
+/* Sidebar tabs and collapsible sections */
+.sidebar-tabs { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 2px 0 10px; position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.sidebar-tabs button { flex: 1; border: 0; background: none; padding: 6px 0; cursor: pointer; font-size: 13px; color: var(--muted); }
+.sidebar-tabs button.on { background: var(--panel-2); color: var(--fg); font-weight: 600; }
+.section-head { display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 0; cursor: pointer; color: inherit; flex: 1; min-width: 0; text-align: left; }
+.section-head .chev { width: 12px; color: var(--muted); font-size: 11px; }
+.section-head h2 { margin: 0; }
+.section-head .count { font-size: 11px; }
+.sidebar section.collapsed { margin-bottom: 8px; }
+.sidebar section.collapsed header { margin-bottom: 0; }

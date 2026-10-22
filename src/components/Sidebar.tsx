@@ -51,6 +51,32 @@ interface Props {
   layoutRunning: boolean;
 }
 
+
+interface SectionProps {
+  id: string;
+  title: string;
+  badge?: React.ReactNode;
+  tools?: React.ReactNode;
+  open: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}
+function Section({ id, title, badge, tools, open, onToggle, children }: SectionProps) {
+  return (
+    <section className={open ? "" : "collapsed"}>
+      <header>
+        <button className="section-head" onClick={() => onToggle(id)} aria-expanded={open}>
+          <span className="chev">{open ? "▾" : "▸"}</span>
+          <h2>{title}</h2>
+          {badge !== undefined && <span className="count">{badge}</span>}
+        </button>
+        {open && tools && <span className="header-tools">{tools}</span>}
+      </header>
+      {open && children}
+    </section>
+  );
+}
+
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
@@ -93,7 +119,39 @@ export function Sidebar(p: Props) {
   const spotFacet = (type: string, value: string) => onChange({ ...filters, spotlight: facetSpot(type, value) ? null : { kind: "facet", type, key: facetKey, value } });
   const unassignedSpot = filters.spotlight?.kind === "unassigned";
   const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
-  const [showGrouping, setShowGrouping] = useState(false);
+  const [tab, setTabState] = useState<"explore" | "settings">(() => {
+    try {
+      return localStorage.getItem("brain-graph.sidebarTab") === "settings" ? "settings" : "explore";
+    } catch {
+      return "explore";
+    }
+  });
+  const setTab = (t: "explore" | "settings") => {
+    setTabState(t);
+    try {
+      localStorage.setItem("brain-graph.sidebarTab", t);
+    } catch {
+      /* ignore */
+    }
+  };
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("brain-graph.sidebarCollapsed") ?? "[]") as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleSection = (id: string) => {
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCollapsed(next);
+    try {
+      localStorage.setItem("brain-graph.sidebarCollapsed", JSON.stringify([...next]));
+    } catch {
+      /* ignore */
+    }
+  };
   const asideRef = useRef<HTMLElement>(null);
 
   // When a hub is selected on the graph, reveal and scroll to its row.
@@ -173,60 +231,182 @@ export function Sidebar(p: Props) {
     );
   };
 
+  const groupingIsDefault = homeSettings.useHas && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
+  const hiddenTypes = types.filter((t) => !filters.types.has(t.name) && t.name !== "Type").length;
+
   return (
     <aside className="sidebar" ref={asideRef}>
-      <section>
-        <header>
-          <h2>Home</h2>
-          <span className="header-tools">
-            {filters.spotlight?.kind === "hub" && (
-              <button className="link small" onClick={() => onChange({ ...filters, spotlight: null })}>
-                unfocus
+      <div className="sidebar-tabs">
+        <button className={tab === "explore" ? "on" : ""} onClick={() => setTab("explore")}>
+          Explore
+        </button>
+        <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
+          Settings
+        </button>
+      </div>
+
+      {tab === "explore" && (
+        <>
+          <Section id="groups" open={!collapsed.has("groups")} onToggle={toggleSection} title="Groups" badge={homeIndex.hubs.size}>
+            <div className="muted small hint">
+              {[...homeSettings.hubTypes].map((t) => `${glyphFor(t)} ${t}`).join(" · ")} · colour by {LEVEL_LABELS[homeLevel].toLowerCase()} ·{" "}
+              <button className="link small" onClick={() => setTab("settings")}>
+                change
               </button>
-            )}
-          </span>
-        </header>
-        <label className="row column" title="Colours follow the groups: pick how far up the hierarchy a note takes its colour from.">
-          <span>
-            Colour by group, rolled up to: <strong>{LEVEL_LABELS[homeLevel]}</strong>
-          </span>
-          <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
-        </label>
-        <label className="row" title="Regions and names follow this section: the grouping types and the roll-up level above. A region is the union of a soft disc around each visible note of the group. Its name is shown when at least four of its notes are visible; names are placed largest group first and nudged up or down to avoid each other. Names fade while something is hovered or focused, and shrink while all note labels are shown.">
-          <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
-          Group regions and names
-          <span className="muted small"> · follow the grouping and level above</span>
-        </label>
-        {filters.hulls && (
-          <label className="row column" title="How far a region extends around its notes and along the links inside the group.">
-            <span>
-              Region size: <strong>{filters.regionSize}×</strong>
-            </span>
-            <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
-          </label>
-        )}
-        {(() => {
-          const isDefault = homeSettings.useHas && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
-          return (
-            <div className="grouping-line">
-              <button className="link small grouping-toggle" onClick={() => setShowGrouping((v) => !v)}>
-                {showGrouping ? "▾" : "▸"} grouping: {[...homeSettings.hubTypes].join(", ")}
-                {homeSettings.useHas ? "" : " · belongs_to only"}
-                {isDefault ? " (default)" : ""}
-              </button>
-              {!isDefault && (
+            </div>
+            <ul className="tree">
+              {homeIndex.roots.map(renderHub)}
+              <li className={`tree-row unassigned${unassignedSpot ? " spotlit" : ""}`} title="Notes whose belongs_to chain reaches no group note. Click to focus them; the audit's target is zero.">
+                <div className="tree-line">
+                  <button className="disclosure empty" aria-hidden="true" />
+                  <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: unassignedSpot ? null : { kind: "unassigned" } })}>
+                    <span className="glyph muted">○</span>
+                    <span className="name muted">Unassigned</span>
+                    <span className="count">{unassignedCount}</span>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </Section>
+
+          <Section
+            id="types"
+            open={!collapsed.has("types")}
+            onToggle={toggleSection}
+            title="Types"
+            badge={types.filter((t) => t.name !== "Type").length}
+            tools={
+              <>
+                {facetKeys.length > 1 && (
+                  <select className="facet-select" value={facetKey} onChange={(e) => setFacetKey(e.target.value)} title="Frontmatter key whose values are listed under each expanded type">
+                    {facetKeys.map((k) => (
+                      <option key={k} value={k}>
+                        by {k}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {hiddenTypes > 0 && (
+                  <button className="link small" onClick={() => setAll("types", true)} title="Show every hidden type again">
+                    show all
+                  </button>
+                )}
+              </>
+            }
+          >
+            <ul className="legend">
+              {types.map((t) => {
+                const on = filters.types.has(t.name);
+                const open = openTypes.has(t.name);
+                const items = open ? instancesOf(t.name) : [];
+                const limit = showAll.has(t.name) ? items.length : 40;
+                return (
+                  <li key={t.name} className={`${on ? "" : "off"}${typeSpot(t.name) ? " spotlit" : ""}`}>
+                    <div className="tree-line">
+                      <button className="disclosure" onClick={() => setOpenTypes(toggleIn(openTypes, t.name))} aria-label={open ? "Collapse" : "Expand"}>
+                        {open ? "▾" : "▸"}
+                      </button>
+                      <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes · click to focus this type, click again to unfocus`}>
+                        <span className="glyph muted">{glyphFor(t.name)}</span>
+                        <span className="name">{t.name}</span>
+                        <span className="count">{t.count}</span>
+                      </button>
+                      <button className={`iso${on ? "" : " on"}`} onClick={() => toggle("types", t.name)} title={on ? "Hide this type from the graph" : "Show this type again"}>
+                        {on ? "hide" : "hidden"}
+                      </button>
+                    </div>
+                    {open && facetsOf(t.name).length > 0 && (
+                      <div className="facets">
+                        {facetsOf(t.name).map(([value, count]) => (
+                          <button key={value} className={`chip${facetSpot(t.name, value) ? " on" : ""}`} onClick={() => spotFacet(t.name, value)} title={`Focus ${t.name} notes with ${facetKey} = ${value}`}>
+                            {value} <span className="count">{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {open && (
+                      <ul className="instances">
+                        {items.slice(0, limit).map((n) => (
+                          <li key={n.id} className={selected === n.id ? "selected" : ""}>
+                            <button className="tree-label" onClick={() => onSelect(n.id)} title={n.summary}>
+                              <span className="name">{n.title}</span>
+                              <span className="count">{n.inDegree + n.outDegree}</span>
+                            </button>
+                          </li>
+                        ))}
+                        {items.length > limit && (
+                          <li>
+                            <button className="link small" onClick={() => setShowAll(toggleIn(showAll, t.name))}>
+                              show all {items.length}
+                            </button>
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+
+          <Section
+            id="links"
+            open={!collapsed.has("links")}
+            onToggle={toggleSection}
+            title="Links"
+            badge={edgeKinds.length}
+            tools={
+              <span className="muted small">
+                <button className="link" onClick={() => setAll("kinds", true)}>
+                  all
+                </button>{" "}
+                ·{" "}
+                <button className="link" onClick={() => setAll("kinds", false)}>
+                  none
+                </button>
+              </span>
+            }
+          >
+            <ul className="legend">
+              {edgeKinds.map((k) => {
+                const on = filters.kinds.has(k.kind);
+                const st = edgeStyle(k.kind);
+                return (
+                  <li key={k.kind} className={on ? "" : "off"}>
+                    <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)} title={on ? "Click to hide these links (Alt-click: show only this kind)" : "Click to show these links again"}>
+                      <span className="edge-swatch" style={{ background: st.color, height: Math.max(1, st.width) }} />
+                      <span className="name">
+                        {k.kind}
+                        {st.directed ? " →" : ""}
+                      </span>
+                      <span className="count">{k.count}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+        </>
+      )}
+
+      {tab === "settings" && (
+        <>
+          <Section
+            id="grouping"
+            open={!collapsed.has("grouping")}
+            onToggle={toggleSection}
+            title="Grouping and colour"
+            tools={
+              !groupingIsDefault && (
                 <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true })} title={`Back to ${homeDefaults.join(", ")} with the has fallback`}>
                   reset
                 </button>
-              )}
-            </div>
-          );
-        })()}
-        {showGrouping && (
-          <div className="grouping">
-            <div className="muted small">
+              )
+            }
+          >
+            <div className="muted small hint">
               Types that act as groups, each drawn with its own shape in the order picked; other notes are circles. A note joins the nearest group reached through its <code>belongs_to</code> (or{" "}
-              <code>parent_*</code>) chain. Default for this vault: {homeDefaults.join(", ")}.
+              <code>parent_*</code>) chain, and takes its colour from it. Default for this vault: {homeDefaults.join(", ")}.
             </div>
             <div className="chips">
               {types
@@ -242,208 +422,108 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
               Fall back to <code>has</code> links
             </label>
-          </div>
-        )}
-        <ul className="tree">
-          {homeIndex.roots.map(renderHub)}
-          <li className={`tree-row unassigned${unassignedSpot ? " spotlit" : ""}`} title="Notes whose belongs_to chain reaches no group note. Click to focus them; the audit's target is zero.">
-            <div className="tree-line">
-              <button className="disclosure empty" aria-hidden="true" />
-              <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: unassignedSpot ? null : { kind: "unassigned" } })}>
-                <span className="glyph muted">○</span>
-                <span className="name muted">Unassigned</span>
-                <span className="count">{unassignedCount}</span>
-              </button>
-            </div>
-          </li>
-        </ul>
-      </section>
+            <label className="row column" title="How far up the hierarchy a note takes its colour from.">
+              <span>
+                Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
+              </span>
+              <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
+            </label>
+          </Section>
 
-      <section>
-        <header>
-          <h2>Types</h2>
-          <span className="header-tools">
-            {(filters.spotlight?.kind === "type" || filters.spotlight?.kind === "facet") && (
-              <button className="link small" onClick={() => onChange({ ...filters, spotlight: null })}>
-                unfocus
-              </button>
+          <Section id="regions" open={!collapsed.has("regions")} onToggle={toggleSection} title="Regions and names">
+            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Its name is shown when at least four of its notes are visible; names are placed largest group first and nudged to avoid each other. Both fade while something is hovered or focused.">
+              <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
+              Show group regions and names
+            </label>
+            {filters.hulls && (
+              <label className="row column" title="How far a region extends around its notes and along the links inside the group.">
+                <span>
+                  Region size: <strong>{filters.regionSize}×</strong>
+                </span>
+                <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
+              </label>
             )}
-            {facetKeys.length > 1 && (
-              <select className="facet-select" value={facetKey} onChange={(e) => setFacetKey(e.target.value)} title="Frontmatter key whose values are listed under each type">
-                {facetKeys.map((k) => (
-                  <option key={k} value={k}>
-                    by {k}
-                  </option>
-                ))}
-              </select>
-            )}
-            {types.some((t) => !filters.types.has(t.name)) && (
-              <button className="link small" onClick={() => setAll("types", true)} title="Show every hidden type again">
-                show all
-              </button>
-            )}
-          </span>
-        </header>
-        <div className="muted small hint">
-          Shapes: {[...homeSettings.hubTypes].map((t) => `${glyphFor(t)} ${t}`).join(" · ")} · ● other
-        </div>
-        <ul className="legend">
-          {types.map((t) => {
-            const on = filters.types.has(t.name);
-            const open = openTypes.has(t.name);
-            const items = open ? instancesOf(t.name) : [];
-            const limit = showAll.has(t.name) ? items.length : 40;
-            return (
-              <li key={t.name} className={`${on ? "" : "off"}${typeSpot(t.name) ? " spotlit" : ""}`}>
-                <div className="tree-line">
-                  <button className="disclosure" onClick={() => setOpenTypes(toggleIn(openTypes, t.name))} aria-label={open ? "Collapse" : "Expand"}>
-                    {open ? "▾" : "▸"}
-                  </button>
-                  <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes · click to focus this type, click again to unfocus`}>
-                    <span className="glyph muted">{glyphFor(t.name)}</span>
-                    <span className="name">{t.name}</span>
-                    <span className="count">{t.count}</span>
-                  </button>
-                  <button className={`iso${on ? "" : " on"}`} onClick={() => toggle("types", t.name)} title={on ? "Hide this type from the graph" : "Show this type again"}>
-                    {on ? "hide" : "hidden"}
-                  </button>
-                </div>
-                {open && facetsOf(t.name).length > 0 && (
-                  <div className="facets">
-                    {facetsOf(t.name).map(([value, count]) => (
-                      <button key={value} className={`chip${facetSpot(t.name, value) ? " on" : ""}`} onClick={() => spotFacet(t.name, value)} title={`Focus ${t.name} notes with ${facetKey} = ${value}`}>
-                        {value} <span className="count">{count}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {open && (
-                  <ul className="instances">
-                    {items.slice(0, limit).map((n) => (
-                      <li key={n.id} className={selected === n.id ? "selected" : ""}>
-                        <button className="tree-label" onClick={() => onSelect(n.id)} title={n.summary}>
-                          <span className="name">{n.title}</span>
-                          <span className="count">{n.inDegree + n.outDegree}</span>
-                        </button>
-                      </li>
-                    ))}
-                    {items.length > limit && (
-                      <li>
-                        <button className="link small" onClick={() => setShowAll(toggleIn(showAll, t.name))}>
-                          show all {items.length}
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+          </Section>
 
-      <section>
-        <header>
-          <h2>Relationships</h2>
-          <span className="muted small">
-            <button className="link" onClick={() => setAll("kinds", true)}>all</button> ·{" "}
-            <button className="link" onClick={() => setAll("kinds", false)}>none</button>
-          </span>
-        </header>
-        <ul className="legend">
-          {edgeKinds.map((k) => {
-            const on = filters.kinds.has(k.kind);
-            const st = edgeStyle(k.kind);
-            return (
-              <li key={k.kind} className={on ? "" : "off"}>
-                <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)} title={on ? "Click to hide these links (Alt-click: show only this kind)" : "Click to show these links again"}>
-                  <span className="edge-swatch" style={{ background: st.color, height: Math.max(1, st.width) }} />
-                  <span className="name">
-                    {k.kind}
-                    {st.directed ? " →" : ""}
-                  </span>
-                  <span className="count">{k.count}</span>
+          <Section
+            id="layout"
+            open={!collapsed.has("layout")}
+            onToggle={toggleSection}
+            title="Layout"
+            tools={
+              !layoutIsDefault && (
+                <button className="link small" onClick={() => onLayoutSettings(DEFAULT_LAYOUT)}>
+                  reset
                 </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+              )
+            }
+          >
+            <div className="muted small hint">Changes apply live in a short run. The map always fills the same frame; these settings change how notes are distributed within it.</div>
+            <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
+              <span>
+                Gravity: <strong>{ls.gravity}</strong>
+              </span>
+              <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
+            </label>
+            <label className="row column" title="How much harder belongs_to, has and parent_* links pull than a related_to link. Higher = tighter groups.">
+              <span>
+                Group pull: <strong>{ls.hierarchyWeight}×</strong>
+              </span>
+              <input type="range" min={1} max={10} step={0.5} value={ls.hierarchyWeight} onChange={(e) => onLayoutSettings({ ...ls, hierarchyWeight: Number(e.target.value) })} />
+            </label>
+            <label className="row" title="ForceAtlas2 LinLog mode: tighter groups with more space between them.">
+              <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
+              Separate groups more (LinLog)
+            </label>
+          </Section>
 
-      <section>
-        <header>
-          <h2>Layout physics</h2>
-          <span className="header-tools">
-            {!layoutIsDefault && (
-              <button className="link small" onClick={() => onLayoutSettings(DEFAULT_LAYOUT)}>
-                reset
-              </button>
-            )}
-          </span>
-        </header>
-        <div className="muted small hint">Changes apply live in a short run. The map always fills the same frame; these settings change how notes are distributed within it.</div>
-        <label className="row column" title="Display only: multiplies every node's size.">
-          <span>
-            Node size: <strong>{ls.nodeScale}×</strong>
-          </span>
-          <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
-        </label>
-        <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
-          <span>
-            Gravity: <strong>{ls.gravity}</strong>
-          </span>
-          <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
-        </label>
-        <label className="row column" title="How much harder belongs_to, has and parent_* links pull than a related_to link. Higher = tighter groups.">
-          <span>
-            Group pull: <strong>{ls.hierarchyWeight}×</strong>
-          </span>
-          <input type="range" min={1} max={10} step={0.5} value={ls.hierarchyWeight} onChange={(e) => onLayoutSettings({ ...ls, hierarchyWeight: Number(e.target.value) })} />
-        </label>
-        <label className="row" title="ForceAtlas2 LinLog mode: tighter groups with more space between them.">
-          <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
-          Separate groups more (LinLog)
-        </label>
-      </section>
+          <Section id="display" open={!collapsed.has("display")} onToggle={toggleSection} title="Display">
+            <label className="row column" title="Multiplies every node's size (display only).">
+              <span>
+                Node size: <strong>{ls.nodeScale}×</strong>
+              </span>
+              <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
+            </label>
+            <label className="row" title="Labels are otherwise shown only for hovered, selected or focused notes.">
+              <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
+              Show all note labels
+            </label>
+            <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
+              <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
+              Fade notes not edited recently
+            </label>
+            <label className="row column">
+              <span>
+                Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
+                {!selected && filters.focusDepth > 0 && <span className="muted"> (select a note)</span>}
+              </span>
+              <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
+            </label>
+          </Section>
 
-      <section>
-        <header>
-          <h2>Options</h2>
-        </header>
-        <label className="row">
-          <input type="checkbox" checked={filters.hideArchived} onChange={(e) => onChange({ ...filters, hideArchived: e.target.checked })} />
-          Hide archived notes
-        </label>
-        <label className="row">
-          <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
-          Hide orphans (no visible links)
-        </label>
-        <label className="row" title="Labels are otherwise shown only for hovered or selected notes and their neighbours.">
-          <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
-          Show all note labels
-        </label>
-        <label className="row" title="Sources are 44% of the notes and almost all leaves. Fold them into a +N count on the note they belong to.">
-          <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />
-          Collapse Sources into their parent
-        </label>
-        <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
-          <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
-          Fade notes not edited recently
-        </label>
-        <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
-          <span>
-            Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
-          </span>
-          <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
-        </label>
-        <label className="row column">
-          <span>
-            Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
-            {!selected && filters.focusDepth > 0 && <span className="muted"> (select a note)</span>}
-          </span>
-          <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
-        </label>
-      </section>
+          <Section id="filter" open={!collapsed.has("filter")} onToggle={toggleSection} title="What is shown">
+            <label className="row">
+              <input type="checkbox" checked={filters.hideArchived} onChange={(e) => onChange({ ...filters, hideArchived: e.target.checked })} />
+              Hide archived notes
+            </label>
+            <label className="row">
+              <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
+              Hide orphans (no visible links)
+            </label>
+            <label className="row" title="Sources are mostly leaves. Fold them into a +N count on the note they belong to.">
+              <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />
+              Collapse Sources into their parent
+            </label>
+            <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
+              <span>
+                Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
+              </span>
+              <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
+            </label>
+            <div className="muted small hint">Hiding a single type: hover its row in Explore → Types and use "hide". Hiding link kinds: Explore → Links.</div>
+          </Section>
+        </>
+      )}
     </aside>
   );
 }
