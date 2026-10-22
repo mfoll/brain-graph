@@ -42,6 +42,8 @@ type LayoutRun = keyof typeof LAYOUT_RUNS;
 
 /** Draggable panel width, remembered per browser. `side` is where the panel sits: dragging the handle away from it widens it. */
 function usePanelWidth(key: string, initial: number, side: "left" | "right", min = 180, max = 720) {
+  // `max` may change with the window; a drag starts from the width actually shown, never from a stored
+  // value larger than what fits (otherwise the handle would not react until the stored value caught up).
   const [width, setWidth] = useState(() => {
     try {
       const v = Number(localStorage.getItem(key));
@@ -54,7 +56,7 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
   const startDrag = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startW = width;
+    const startW = Math.min(width, max);
     const sign = side === "left" ? 1 : -1;
     setDragging(true);
     const move = (ev: MouseEvent) => setWidth(Math.min(max, Math.max(min, startW + sign * (ev.clientX - startX))));
@@ -127,8 +129,27 @@ export default function App() {
     }
   };
   const { data, error, reload } = useVault(vaultSlug);
-  const sidebar = usePanelWidth("brain-graph.sidebarWidth", 260, "left");
-  const panel = usePanelWidth("brain-graph.panelWidth", 420, "right", 280, 900);
+  // The graph keeps at least STAGE_MIN pixels; when the window is too narrow for both panels at their
+  // chosen widths, the note panel yields (its chosen width is kept and comes back when there is room).
+  const STAGE_MIN = 320;
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    // Observe the document rather than the resize event alone: emulated viewports and some embedded
+    // webviews change the size without firing it.
+    const update = () => setWindowWidth(document.documentElement.clientWidth || window.innerWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(document.documentElement);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  const sidebar = usePanelWidth("brain-graph.sidebarWidth", 260, "left", 180, Math.max(180, windowWidth - 12 - STAGE_MIN - 280));
+  const panelMax = Math.max(280, Math.min(900, windowWidth - sidebar.width - 12 - STAGE_MIN));
+  const panel = usePanelWidth("brain-graph.panelWidth", 420, "right", 280, panelMax);
+  const panelWidthShown = Math.min(panel.width, panelMax);
   const saved = useSavedLayout(vaultSlug);
   const theme = useTheme();
 
@@ -626,7 +647,7 @@ export default function App() {
   return (
     <div
       className={`app${sidebar.dragging || panel.dragging ? " resizing" : ""}${selectedNode ? " with-panel" : ""}`}
-      style={{ "--sidebar-w": `${sidebar.width}px`, "--panel-w": `${panel.width}px` } as React.CSSProperties}
+      style={{ "--sidebar-w": `${sidebar.width}px`, "--panel-w": `${panelWidthShown}px` } as React.CSSProperties}
     >
       <header className="topbar">
         <div className="brand">

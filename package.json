@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "graph:dump": "node server/dump.ts",
-    "graph:homes": "node server/homes.ts"
+    "graph:homes": "node server/homes.ts",
+    "prepare": "npm run build",
+    "start": "node bin/brain-graph.mjs"
   },
   "dependencies": {
     "@sigma/export-image": "^4.0.0",
@@ -24,6 +26,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "sigma": "^4.0.3",
+    "sirv": "^3.0.2",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
@@ -36,5 +39,21 @@
     "vite": "^8.3.4"
   },
   "description": "Interactive graph view of a Markdown note vault (Tolaria-style frontmatter types and wikilink relationships), coloured and grouped by the project or responsibility each note belongs to.",
-  "license": "MIT"
+  "license": "MIT",
+  "bin": {
+    "brain-graph": "bin/brain-graph.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfoll/brain-graph.git"
+  }
 }

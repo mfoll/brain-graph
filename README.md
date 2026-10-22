@@ -30,16 +30,36 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 - During a layout run the physics keeps its natural scale and the frame follows the map smoothly; when the run ends, positions are normalised once to a fixed extent (so saved maps are comparable, node sizes stay constant, and **Fit** is a smooth camera move back to the full view). Normalising on every frame was tried and rejected: it fights ForceAtlas2's natural scale and collapses the map into a ball.
 - Stable map: node positions are saved to `.tmp/layouts/<vault-slug>.json` when a layout run stops (or you pause it). The next start restores them without running the layout; only new notes get a short settling run, placed next to their linked notes while everything else stays pinned. **Reset layout** forgets the saved positions.
 
-## Run
+## Install and run
+
+Brain Graph is a small local web app: a Node process reads your vault and serves the viewer to your browser. It needs Node 20.19 or newer and nothing else.
 
 ```bash
-pnpm install
-pnpm dev
+npx github:mfoll/brain-graph ~/path/to/vault
 ```
 
-Then open <http://localhost:5178>. The dropdown at the top left lists your vaults; **Manage vaults…** opens a dialog to add a folder by path (any folder of Markdown notes), remove one, and choose whether to include the vaults registered in Tolaria (read from `~/Library/Application Support/com.tolaria.app/vaults.json` when present; Tolaria is optional). The list is stored in `~/.config/brain-graph/vaults.json`. Your last choice is remembered. Each vault has its own graph, saved layout, filters and grouping default: the Second Brain ontology gets Project / Responsibility / Topic, the Scientific Production Archive gets Paper / Grant (the types most often on the receiving end of `parent_*` and `belongs_to` links). Only the selected vault is read; the others are not parsed until you switch to them.
+The first run builds the app (about a minute), later runs start in a second. The folder is optional: without one, Brain Graph serves the vaults registered in Tolaria plus the folders you add in the app. Options: `--port 5178`, `--no-open`.
 
-Without Tolaria, or to add a vault that is not registered, start with `VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev`; that vault becomes the default. Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label.
+To keep it around, install it once and run it by name:
+
+```bash
+npm install -g github:mfoll/brain-graph
+brain-graph ~/path/to/vault
+```
+
+Then open <http://localhost:5178>. The dropdown at the top left lists your vaults; **Manage vaults…** opens a dialog to add a folder by path (any folder of Markdown notes), remove one, and choose whether to include the vaults registered in Tolaria (read from `~/Library/Application Support/com.tolaria.app/vaults.json` when present; Tolaria is optional). The list is stored in `~/.config/brain-graph/vaults.json` and saved layouts in `~/.config/brain-graph/layouts/`. Your last choice is remembered. Each vault has its own graph, saved layout, filters and grouping default: the Second Brain ontology gets Project / Responsibility / Topic, the Scientific Production Archive gets Paper / Grant (the types most often on the receiving end of `parent_*` and `belongs_to` links). Only the selected vault is read; the others are not parsed until you switch to them. The viewer never writes to a vault.
+
+Edits to notes show up live: the server watches the vault and the page rebuilds the graph when a note changes.
+
+## Development
+
+```bash
+git clone https://github.com/mfoll/brain-graph && cd brain-graph
+pnpm install
+VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev   # Vite dev server with hot reload on :5178
+```
+
+Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label. `pnpm build` produces `dist/` (the app plus the compiled server), which `bin/brain-graph.mjs` serves; `pnpm start -- ~/path/to/vault` runs that CLI from the checkout.
 
 Other commands:
 
@@ -50,12 +70,14 @@ pnpm graph:homes ~/my-vault               # the inferred group hierarchy plus au
                                           # (--no-has, --hubs=Project,Topic, --json)
 ```
 
-`graph:homes` prints the hierarchy the viewer infers and four audit lists: Projects whose parent is a Topic (a convention check for Tolaria's template, where Topics are lateral), notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. It is meant as input for reorganising `belongs_to` in a vault; the viewer never writes to the vault.
+`graph:homes` prints the hierarchy the viewer infers and four audit lists: Projects whose parent is a Topic (a convention check for Tolaria's template, where Topics are lateral), notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. It is meant as input for reorganising `belongs_to` in a vault.
+
+Contributions are welcome as issues or pull requests. Keep the vault format assumptions (frontmatter relationships, Tolaria conventions) configurable rather than hard-coded, and run `pnpm typecheck` before opening a pull request.
 
 ## How it works
 
 - `server/vault.ts` walks the vault (skipping dot-folders), parses frontmatter with `yaml`, extracts the H1, first paragraph, Type metadata and all wikilinks, and resolves link targets (root stems, folder-path stems, `|alias` and `#anchor` forms).
-- `server/vite-plugin-vault.ts` serves the graph at `/api/graph` and pushes change events over Server-Sent Events at `/api/events`, using `chokidar`.
+- `server/api.ts` is a framework-free HTTP API (vault registry, `/api/graph`, note text, saved layouts, change events over Server-Sent Events via `chokidar`). The Vite plugin mounts it in development; `bin/brain-graph.mjs` serves it with the built app.
 - `src/` is React 19 + TypeScript on Vite 8. Rendering uses Sigma.js 4 with Graphology: the declarative styles API maps attributes to colour/size, and node/edge *state* (`isHidden`, `isHighlighted`, custom `isSelected`) drives filtering and hover emphasis without mutating the graph.
 
 ## Status
