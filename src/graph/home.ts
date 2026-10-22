@@ -1,4 +1,4 @@
-import type { NoteNode, VaultGraph } from "../types";
+import type { NoteNode, VaultGraph } from "../types.ts";
 
 /** 0 = colour by root area, 1 = by top-level hub under it, 2 = by nearest hub. */
 export type HomeLevel = 0 | 1 | 2;
@@ -15,6 +15,20 @@ export interface HomeSettings {
   palette?: PaletteId;
   /** Role of each relationship kind; kinds not listed take the convention default (see defaultLinkRole). */
   roles?: Record<string, LinkRole>;
+  /** Types whose notes sit outside the hierarchy by design; default: defaultExemptTypes(data). */
+  exemptTypes?: Set<string>;
+  /** Root types: an up-link from one of them to a note of another type is ignored (default Responsibility). */
+  rootTypes?: Set<string>;
+  /** Types that, with no parent, take the home of their first lateral link to a hub (default Person). */
+  lateralHomeTypes?: Set<string>;
+}
+
+/** Outside the hierarchy by convention (Second Brain template, ADR 0028): plus every type whose definition note carries `hierarchy_exempt: true`. */
+export const EXEMPT_TYPES = ["Recap", "Guide", "Type", "Operation"];
+export function defaultExemptTypes(data: VaultGraph): Set<string> {
+  const set = new Set(EXEMPT_TYPES);
+  for (const n of data.nodes) if (n.type === "Type" && n.properties.hierarchy_exempt === true) set.add(n.title);
+  return set;
 }
 
 /** Tolaria's conventions: belongs_to and parent_* point to the parent, has points to children, the rest is lateral. */
@@ -95,6 +109,8 @@ export interface NoteHome {
   depth: number;
   alternatives: string[];
   viaHas: boolean;
+  /** Outside the hierarchy by design (exempt type or archived): no home, but not unassigned either. */
+  exempt: boolean;
   /** Steps from the note to its hub, nearest first: which relationship led to which note. */
   path: { via: string; id: string }[];
 }
@@ -131,18 +147,26 @@ function hsl(h: number, s: number, l: number): string {
  */
 function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, NoteHome> {
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
+  const typeOf = (id: string) => byId.get(id)?.type ?? "";
+  const exempt = settings.exemptTypes ?? defaultExemptTypes(data);
+  const rootTypes = settings.rootTypes ?? new Set(["Responsibility"]);
+  const lateralTypes = settings.lateralHomeTypes ?? new Set(["Person"]);
   type Parent = { id: string; via: string };
   const strong = new Map<string, Parent[]>();
   const both = new Map<string, Parent[]>();
+  const lateral = new Map<string, Parent[]>();
   const link = (map: Map<string, Parent[]>, child: string, parent: string, via: string) => {
     if (child !== parent) (map.get(child) ?? map.set(child, []).get(child)!).push({ id: parent, via });
   };
   for (const e of data.edges) {
     const role = linkRole(e.kind, settings);
     if (role === "up") {
+      // A root type (Responsibility) answers for itself: its link to a Topic or Project is context, not a parent.
+      if (rootTypes.has(typeOf(e.source)) && !rootTypes.has(typeOf(e.target))) continue;
       link(strong, e.source, e.target, e.kind);
       link(both, e.source, e.target, e.kind);
     } else if (role === "down") link(both, e.target, e.source, e.kind);
+    else if (lateralTypes.has(typeOf(e.source))) link(lateral, e.source, e.target, e.kind);
   }
   const isHub = (id: string) => settings.hubTypes.has(byId.get(id)?.type ?? "");
   const preferProject = settings.hubTypes.has("Project");
@@ -157,6 +181,7 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
       depth,
       alternatives: picked.slice(1).map((s) => s.id),
       viaHas: picked[0].path.some((p) => linkRole(p.via, settings) === "down"),
+      exempt: false,
       path: picked[0].path,
     });
     for (let depth = 1; depth <= 8 && frontier.length; depth++) {
@@ -174,8 +199,17 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
   const homes = new Map<string, NoteHome>();
   for (const n of data.nodes) {
     if (n.type === "Type") continue;
-    const h = walk(n.id, strong) ?? (settings.useHas ? walk(n.id, both) : null);
-    homes.set(n.id, h ?? { hub: null, depth: 0, alternatives: [], viaHas: false, path: [] });
+    if (exempt.has(n.type ?? "") || n.archived) {
+      homes.set(n.id, { hub: null, depth: 0, alternatives: [], viaHas: false, exempt: true, path: [] });
+      continue;
+    }
+    let h = walk(n.id, strong) ?? (settings.useHas ? walk(n.id, both) : null);
+    // A parentless Person is coloured by the first hub it relates to (an external contact's project).
+    if (!h && lateralTypes.has(n.type ?? "")) {
+      const p = (lateral.get(n.id) ?? []).find((x) => isHub(x.id));
+      if (p) h = { hub: p.id, depth: 1, alternatives: [], viaHas: false, exempt: false, path: [p] };
+    }
+    homes.set(n.id, h ?? { hub: null, depth: 0, alternatives: [], viaHas: false, exempt: false, path: [] });
   }
   return homes;
 }

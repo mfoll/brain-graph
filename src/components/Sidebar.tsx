@@ -34,6 +34,10 @@ export interface Filters {
   regionSize: number;
   /** Base opacity of links. */
   linkOpacity: number;
+  /** Link width multiplier. */
+  linkWidth: number;
+  /** Rendered node size (px) from which a note's label is drawn; lower shows more labels at a given zoom. */
+  labelThreshold: number;
 }
 
 interface Props {
@@ -534,6 +538,18 @@ export function Sidebar(p: Props) {
                 Link opacity: <strong>{Math.round(filters.linkOpacity * 100)}%</strong>
               </span>
               <input type="range" min={0.1} max={1} step={0.05} value={filters.linkOpacity} onChange={(e) => onChange({ ...filters, linkOpacity: Number(e.target.value) })} />
+            </label>
+            <label className="row column" title="Width of every link; structure links stay thicker than lateral ones.">
+              <span>
+                Link width: <strong>{filters.linkWidth}×</strong>
+              </span>
+              <input type="range" min={0.5} max={2.5} step={0.1} value={filters.linkWidth} onChange={(e) => onChange({ ...filters, linkWidth: Number(e.target.value) })} />
+            </label>
+            <label className="row column" title="Labels appear as you zoom in, once a note is drawn at least this many pixels wide. Lower the threshold to see more labels at the same zoom.">
+              <span>
+                Labels appear from <strong>{filters.labelThreshold} px</strong> node size
+              </span>
+              <input type="range" min={2} max={14} step={1} value={filters.labelThreshold} onChange={(e) => onChange({ ...filters, labelThreshold: Number(e.target.value) })} />
             </label>
             <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
               <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />

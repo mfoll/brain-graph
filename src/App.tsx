@@ -101,6 +101,8 @@ function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters
     regionSize: v.regionSize ?? 1,
     linkOpacity: v.linkOpacity ?? 0.55,
     ghosts: v.ghosts ?? false,
+    linkWidth: v.linkWidth ?? 1,
+    labelThreshold: v.labelThreshold ?? 7,
     types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
     kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => !hiddenKinds.has(k))),
   };
@@ -266,6 +268,8 @@ export default function App() {
     minDegree: 0,
     regionSize: 1,
     linkOpacity: 0.55,
+    linkWidth: 1,
+    labelThreshold: 7,
     ghosts: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
@@ -501,7 +505,7 @@ export default function App() {
       for (const n of data.nodes) if ((n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) && !hidden.has(n.id)) set.add(n.id);
     } else {
       // Unassigned: notes that are not groups themselves and whose chain reaches no group.
-      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
+      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !homeIndex.homes.get(n.id)?.exempt && !hidden.has(n.id)) set.add(n.id);
     }
     return set;
   }, [filters.spotlight, data, homeIndex, hidden]);
@@ -524,7 +528,7 @@ export default function App() {
       .sort((a, b) => b.count - a.count);
   }, [data, filteredGraph]);
   const unassignedCount = useMemo(
-    () => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub).length : 0),
+    () => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !homeIndex.homes.get(n.id)?.exempt).length : 0),
     [data, homeIndex],
   );
 
@@ -870,6 +874,8 @@ export default function App() {
           hulls={filters.hulls || filters.names ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize, regions: filters.hulls, names: filters.names } : null}
           showLabels={filters.labels}
           linkOpacity={filters.linkOpacity}
+          linkWidth={filters.linkWidth}
+          labelThreshold={filters.labelThreshold}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}
           onHover={(node, pos) => {
