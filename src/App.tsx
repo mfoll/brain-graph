@@ -562,6 +562,11 @@ export default function App() {
   // Colour as drawn on the map (the note's group); the type is shown as a neutral tag with its shape.
   const mapColor = (id: string) => (filteredGraph.hasNode(id) ? (filteredGraph.getNodeAttribute(id, "color") as string) : undefined);
   const typeTag = (type: string | null) => `${SHAPE_GLYPH[shapeFor(type, homeSettings)]} ${type ?? "untyped"}`;
+  // Type badges take the Type note's own colour, as in Tolaria's sidebar (a tint, so it is not read as a map colour).
+  const typeTagStyle = (type: string | null) => {
+    const c = typeColors.get(type ?? "(untyped)");
+    return c ? ({ color: c, borderColor: c, background: `color-mix(in srgb, ${c} 14%, transparent)` } as React.CSSProperties) : undefined;
+  };
   // Deviations from the default view, each with its own undo. Defaults themselves (body links hidden,
   // archived hidden) are not listed, so an empty line means "the default view".
   const defaultKinds = (k: string) => k !== "body";
@@ -649,7 +654,7 @@ export default function App() {
                   >
                     <span className="dot" style={{ background: mapColor(m.id) }} />
                     <span className="name">{m.title}</span>
-                    <span className="muted small">{typeTag(m.type)}</span>
+                    <span className="small" style={{ color: typeColors.get(m.type ?? "(untyped)") }}>{typeTag(m.type)}</span>
                   </button>
                 </li>
               ))}
@@ -774,7 +779,7 @@ export default function App() {
         {hoveredNode && pointer && (
           <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>
             <div className="tip-head">
-              <span className="type-tag">{typeTag(hoveredNode.type)}</span>
+              <span className="type-tag" style={typeTagStyle(hoveredNode.type)}>{typeTag(hoveredNode.type)}</span>
               {(() => {
                 const h = homeIndex.homes.get(hoveredNode.id)?.hub;
                 const groupId = homeIndex.hubs.has(hoveredNode.id) ? hoveredNode.id : h;

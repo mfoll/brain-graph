@@ -20,11 +20,14 @@ interface Props {
   onForward: () => void;
 }
 
+const typeName0 = (n: NoteNode) => n.type ?? "(untyped)";
+
 export function deepLink(data: VaultGraph, id: string): string {
   return `tolaria://${data.vault.slug}/${id.split("/").map(encodeURIComponent).join("/")}.md`;
 }
 
-export function NotePanel({ data, graph, node, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward }: Props) {
+export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward }: Props) {
+  const typeColor = typeColors.get(typeName0(node));
   const chain = homeChain(node, homeIndex).filter((id) => id !== node.id).reverse(); // root first
   const noteHome = homeIndex.homes.get(node.id);
   const isHub = homeIndex.hubs.has(node.id);
@@ -88,7 +91,7 @@ export function NotePanel({ data, graph, node, homeIndex, onSelect, onClose, can
         {ordered.map(([type, notes]) => (
           <div key={type} className="rel-group">
             <div className="rel-kind">
-              <span className="glyph muted">{SHAPE_GLYPH[shapeFor(type, homeIndex.settings)]}</span> {type} <span className="count">{notes.length}</span>
+              <span className="glyph" style={{ color: typeColors.get(type) }}>{SHAPE_GLYPH[shapeFor(type, homeIndex.settings)]}</span> {type} <span className="count">{notes.length}</span>
             </div>
             <ul>
               {notes
@@ -115,7 +118,7 @@ export function NotePanel({ data, graph, node, homeIndex, onSelect, onClose, can
         <button className="navbtn" onClick={onForward} disabled={!canForward} title="Forward" aria-label="Forward">›</button>
         <button className="navbtn close" onClick={onClose} title="Close (Esc)" aria-label="Close">×</button>
       </div>
-      <div className="type-tag">
+      <div className="type-tag" style={typeColor ? { color: typeColor, borderColor: typeColor, background: `color-mix(in srgb, ${typeColor} 14%, transparent)` } : undefined}>
         {SHAPE_GLYPH[shapeFor(node.type, homeIndex.settings)]} {typeName}
       </div>
       <h2>{node.title}</h2>
