@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
-import { NotePanel } from "./components/NotePanel";
+import { NotePanel, type PanelTab } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
@@ -541,31 +541,37 @@ export default function App() {
       .slice(0, 12);
   }, [data, query]);
 
-  // Panel navigation history: every selection of a different note is a step; back/forward replay them.
-  const history = useRef<{ past: string[]; future: string[] }>({ past: [], future: [] });
+  // Panel navigation history: every selection of a different note is a step, remembered with the tab
+  // that was open; back/forward replay both. A newly opened note starts on its text.
+  type Step = { id: string; tab: PanelTab };
+  const [panelTab, setPanelTab] = useState<PanelTab>("note");
+  const history = useRef<{ past: Step[]; future: Step[] }>({ past: [], future: [] });
   const [historyVersion, setHistoryVersion] = useState(0);
   const select = (id: string | null, center = false, record = true) => {
     if (record && id && selected && id !== selected) {
-      history.current.past.push(selected);
+      history.current.past.push({ id: selected, tab: panelTab });
       history.current.future = [];
       setHistoryVersion((v) => v + 1);
     }
+    if (record && id !== selected) setPanelTab("note");
     setSelected(id);
     if (id && center) setFocusRequest({ node: id, nonce: Date.now() });
   };
   const goBack = () => {
     const prev = history.current.past.pop();
     if (!prev) return;
-    if (selected) history.current.future.push(selected);
+    if (selected) history.current.future.push({ id: selected, tab: panelTab });
     setHistoryVersion((v) => v + 1);
-    select(prev, true, false);
+    select(prev.id, true, false);
+    setPanelTab(prev.tab);
   };
   const goForward = () => {
     const next = history.current.future.pop();
     if (!next) return;
-    if (selected) history.current.past.push(selected);
+    if (selected) history.current.past.push({ id: selected, tab: panelTab });
     setHistoryVersion((v) => v + 1);
-    select(next, true, false);
+    select(next.id, true, false);
+    setPanelTab(next.tab);
   };
   void historyVersion;
   // Home row click: focus the group and open its note; clicking the focused group again clears both.
@@ -939,6 +945,8 @@ export default function App() {
           homeIndex={homeIndex}
           onSelect={(id) => select(id, true)}
           onClose={() => setSelected(null)}
+          tab={panelTab}
+          onTab={setPanelTab}
           canBack={history.current.past.length > 0}
           canForward={history.current.future.length > 0}
           onBack={goBack}

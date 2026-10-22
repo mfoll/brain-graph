@@ -13,6 +13,9 @@ interface Props {
   homeIndex: HomeIndex;
   onSelect: (id: string) => void;
   onClose: () => void;
+  /** Active tab, owned by the app so back and forward can restore it. */
+  tab: PanelTab;
+  onTab: (tab: PanelTab) => void;
   /** Note navigation history inside the panel. */
   canBack: boolean;
   canForward: boolean;
@@ -26,18 +29,18 @@ export function deepLink(data: VaultGraph, id: string): string {
   return `tolaria://${data.vault.slug}/${id.split("/").map(encodeURIComponent).join("/")}.md`;
 }
 
-export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward }: Props) {
+export type PanelTab = "note" | "links" | "members";
+
+export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward, tab: wanted, onTab }: Props) {
   const typeColor = typeColors.get(typeName0(node));
   const chain = homeChain(node, homeIndex).filter((id) => id !== node.id).reverse(); // root first
   const noteHome = homeIndex.homes.get(node.id);
   const isHub = homeIndex.hubs.has(node.id);
-  const [tab, setTab] = useState<"note" | "links" | "members">("note");
+  // Members exists only for a group note: a restored "members" tab on a plain note shows the text instead.
+  const tab: PanelTab = wanted === "members" && !isHub ? "note" : wanted;
+  const setTab = onTab;
   const [showWhy, setShowWhy] = useState(false);
-  // A newly opened note always starts on its text.
-  useEffect(() => {
-    setTab("note");
-    setShowWhy(false);
-  }, [node.id]);
+  useEffect(() => setShowWhy(false), [node.id]);
   const members = isHub ? [...subtreeMembers(node.id, data, homeIndex)].filter((id) => id !== node.id) : [];
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const out = new Map<string, string[]>();
