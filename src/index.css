@@ -32,17 +32,18 @@ button { font: inherit; color: inherit; }
   --panel-w: 420px;
   display: grid;
   grid-template-columns: var(--sidebar-w) 6px 1fr 0 0;
-  grid-template-rows: 48px auto 1fr;
+  grid-template-rows: 48px 30px 1fr;
   grid-template-areas: "top top top top top" "state state state state state" "side gutter stage gutter2 note";
   height: 100%;
 }
 .stateline {
   grid-area: state;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 3px 14px; font-size: 12px; color: var(--muted);
+  min-height: 30px; padding: 2px 14px; font-size: 12px; color: var(--muted);
   background: color-mix(in srgb, var(--accent) 10%, var(--panel));
   border-bottom: 1px solid var(--border);
 }
+.stateline.empty { background: var(--panel); }
 .app.with-panel { grid-template-columns: var(--sidebar-w) 6px minmax(240px, 1fr) 6px min(var(--panel-w), calc(100vw - var(--sidebar-w) - 252px)); }
 .gutter-right { grid-area: gutter2; border-right: 0; border-left: 1px solid var(--border); }
 .gutter {
@@ -260,8 +261,8 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .section-head .count { font-size: 11px; }
 .sidebar section.collapsed { margin-bottom: 8px; }
 .sidebar section.collapsed header { margin-bottom: 0; }
-.chips-inline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.state-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); font-size: 12px; }
+.chips-inline { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; align-items: center; min-width: 0; scrollbar-width: none; }
+.state-chip { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); font-size: 12px; }
 .state-chip.stale { border-color: #f59e0b; color: #b45309; }
 .chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 999px; }
 .chip-x:hover { background: var(--panel-2); color: var(--fg); }

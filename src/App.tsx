@@ -602,8 +602,12 @@ export default function App() {
         </div>
         {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
-      {(stateParts.length > 0 || kindsChanged) && (
-        <div className="stateline">
+      <div className={`stateline${stateParts.length === 0 && !kindsChanged ? " empty" : ""}`}>
+        {stateParts.length === 0 && !kindsChanged && (
+          <span className="muted small" title="Nothing focused; all types and relationship links shown; body links and archived notes hidden.">
+            Default view
+          </span>
+        )}
           <span className="chips-inline">
             {stateParts.map((part) => (
               <span key={part.label} className="state-chip" title={part.title}>
@@ -627,8 +631,7 @@ export default function App() {
               reset view
             </button>
           )}
-        </div>
-      )}
+      </div>
 
       <Sidebar
         data={data}
