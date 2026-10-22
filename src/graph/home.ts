@@ -3,14 +3,29 @@ import type { NoteNode, VaultGraph } from "../types";
 /** 0 = colour by root area, 1 = by top-level hub under it, 2 = by nearest hub. */
 export type HomeLevel = 0 | 1 | 2;
 
+/** What a relationship kind means for the hierarchy. */
+export type LinkRole = "up" | "down" | "lateral"; // up: child -> parent (belongs_to); down: parent -> child (has)
+
 export interface HomeSettings {
   /** Note types that act as grouping hubs. */
   hubTypes: Set<string>;
-  /** Follow inverse `has` links (parent has note) when `belongs_to` alone reaches no hub. */
+  /** Follow parent -> child kinds (e.g. `has`) when the child -> parent kinds alone reach no hub. */
   useHas: boolean;
   /** Colour palette for groups (see PALETTES). */
   palette?: PaletteId;
+  /** Role of each relationship kind; kinds not listed take the convention default (see defaultLinkRole). */
+  roles?: Record<string, LinkRole>;
 }
+
+/** Tolaria's conventions: belongs_to and parent_* point to the parent, has points to children, the rest is lateral. */
+export function defaultLinkRole(kind: string): LinkRole {
+  if (kind === "belongs_to" || kind.startsWith("parent_")) return "up";
+  if (kind === "has") return "down";
+  return "lateral";
+}
+export const linkRole = (kind: string, settings?: Pick<HomeSettings, "roles">): LinkRole => settings?.roles?.[kind] ?? defaultLinkRole(kind);
+/** Any role but lateral: the link says where a note belongs. */
+export const isStructureKind = (kind: string, settings?: Pick<HomeSettings, "roles">) => linkRole(kind, settings) !== "lateral";
 
 /** Categorical palettes for the groups, biggest group first. Sub-groups take shades of their parent's hue. */
 export const PALETTES = {
@@ -41,21 +56,19 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
 
 export const DEFAULT_HUB_TYPES = ["Project", "Responsibility", "Topic"];
 
-/** Relationship keys that express "this note is part of that one": Tolaria's belongs_to plus parent_* keys (used by the archive). */
-export const isParentKind = (kind: string) => kind === "belongs_to" || kind.startsWith("parent_");
-
 /**
  * Default grouping for a vault: the Second Brain hub types when the vault has them, otherwise the
  * types most often found on the receiving end of a parent link (for the archive: Paper, Grant).
  */
-export function defaultHubTypes(data: VaultGraph): string[] {
+export function defaultHubTypes(data: VaultGraph, settings?: Pick<HomeSettings, "roles">): string[] {
   const present = new Set(data.types.map((t) => t.name));
   const std = DEFAULT_HUB_TYPES.filter((t) => present.has(t));
   if (std.length) return std;
   const byId = new Map(data.nodes.map((n) => [n.id, n.type ?? "(untyped)"]));
   const counts = new Map<string, number>();
   for (const e of data.edges) {
-    const target = isParentKind(e.kind) ? e.target : e.kind === "has" ? e.source : null;
+    const role = linkRole(e.kind, settings);
+    const target = role === "up" ? e.target : role === "down" ? e.source : null;
     if (target) counts.set(byId.get(target)!, (counts.get(byId.get(target)!) ?? 0) + 1);
   }
   const ranked = [...counts.entries()].filter(([t]) => t !== "(untyped)").sort((a, b) => b[1] - a[1]);
@@ -125,10 +138,11 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
     if (child !== parent) (map.get(child) ?? map.set(child, []).get(child)!).push({ id: parent, via });
   };
   for (const e of data.edges) {
-    if (isParentKind(e.kind)) {
+    const role = linkRole(e.kind, settings);
+    if (role === "up") {
       link(strong, e.source, e.target, e.kind);
       link(both, e.source, e.target, e.kind);
-    } else if (e.kind === "has") link(both, e.target, e.source, "has");
+    } else if (role === "down") link(both, e.target, e.source, e.kind);
   }
   const isHub = (id: string) => settings.hubTypes.has(byId.get(id)?.type ?? "");
   const preferProject = settings.hubTypes.has("Project");
@@ -142,7 +156,7 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
       hub: picked[0].id,
       depth,
       alternatives: picked.slice(1).map((s) => s.id),
-      viaHas: picked[0].path.some((p) => p.via === "has"),
+      viaHas: picked[0].path.some((p) => linkRole(p.via, settings) === "down"),
       path: picked[0].path,
     });
     for (let depth = 1; depth <= 8 && frontier.length; depth++) {

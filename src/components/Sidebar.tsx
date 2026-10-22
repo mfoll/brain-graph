@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
-import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type PaletteId } from "../graph/home";
-import { DEFAULT_LAYOUT, isHierarchyKind, type LayoutSettings } from "../graph/build";
+import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, defaultLinkRole, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type LinkRole, type PaletteId } from "../graph/home";
+
+const ROLE_LABEL: Record<LinkRole, string> = { up: "→ parent", down: "→ children", lateral: "lateral" };
+const ROLE_GLYPH: Record<LinkRole, string> = { up: "↑", down: "↓", lateral: "↔" };
+const NEXT_ROLE: Record<LinkRole, LinkRole> = { lateral: "up", up: "down", down: "lateral" };
+import { DEFAULT_LAYOUT, type LayoutSettings } from "../graph/build";
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -241,7 +245,14 @@ export function Sidebar(p: Props) {
     );
   };
 
-  const groupingIsDefault = homeSettings.useHas && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
+  const rolesAreDefault = edgeKinds.every((k) => linkRole(k.kind, homeSettings) === defaultLinkRole(k.kind));
+  const groupingIsDefault = homeSettings.useHas && rolesAreDefault && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
+  const setRole = (kind: string, role: LinkRole) => {
+    const roles = { ...(homeSettings.roles ?? {}) };
+    if (role === defaultLinkRole(kind)) delete roles[kind];
+    else roles[kind] = role;
+    p.onHomeSettings({ ...homeSettings, roles });
+  };
   const hiddenTypes = types.filter((t) => !filters.types.has(t.name) && t.name !== "Type").length;
 
   return (
@@ -388,7 +399,7 @@ export function Sidebar(p: Props) {
                       <span className="name">
                         {k.kind}
                         {st.directed ? " →" : ""}
-                        <span className="muted small"> · {isHierarchyKind(k.kind) ? "structure" : "lateral"}</span>
+                        <span className="muted small"> · {ROLE_GLYPH[linkRole(k.kind, homeSettings)]} {ROLE_LABEL[linkRole(k.kind, homeSettings)]}</span>
                       </span>
                       <span className="count">{k.count}</span>
                     </button>
@@ -409,7 +420,7 @@ export function Sidebar(p: Props) {
             onToggle={toggleSection}
             tools={
               !groupingIsDefault && (
-                <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true })} title={`Back to ${homeDefaults.join(", ")} with the has fallback`}>
+                <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true, palette: homeSettings.palette, roles: {} })} title={`Back to ${homeDefaults.join(", ")}, the Tolaria link roles and the parent → children fallback`}>
                   reset
                 </button>
               )
@@ -429,9 +440,22 @@ export function Sidebar(p: Props) {
                   </button>
                 ))}
             </div>
-            <label className="row" title="Tolaria treats `has` as the inverse of `belongs_to`, but vaults often use it for selective entry points rather than ownership, so it is only followed when belongs_to reaches no group.">
+            <div className="row column" title="What each relationship kind means for the hierarchy. Click a chip to cycle: lateral (context only) → points to the parent (like belongs_to) → points to children (like has). Defaults follow Tolaria's conventions.">
+              <span>Link roles</span>
+              <div className="chips">
+                {edgeKinds.map((k) => {
+                  const role = linkRole(k.kind, homeSettings);
+                  return (
+                    <button key={k.kind} className={`chip${role !== "lateral" ? " on" : ""}`} onClick={() => setRole(k.kind, NEXT_ROLE[role])} title={`${k.kind}: ${ROLE_LABEL[role]}${role === defaultLinkRole(k.kind) ? " (default)" : ""}. Click to change.`}>
+                      {ROLE_GLYPH[role]} {k.kind}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label className="row" title="Parent → children kinds (such as `has`) are often used for selective entry points rather than ownership, so they are only followed when the child → parent kinds reach no group.">
               <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
-              Fall back to <code>has</code> links
+              Fall back to parent → children links
             </label>
           </Section>
 

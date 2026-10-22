@@ -1,7 +1,7 @@
 import type Sigma from "sigma";
 import type { VaultGraph } from "../types";
-import { isHierarchyKind, type BrainGraph } from "./build";
-import { anchorAt, homeChain, type HomeIndex, type HomeLevel } from "./home";
+import type { BrainGraph } from "./build";
+import { anchorAt, homeChain, isStructureKind, type HomeIndex, type HomeLevel } from "./home";
 
 export interface HullOptions {
   index: HomeIndex;
@@ -88,7 +88,7 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   // instead of a string of beads when its notes are small or a little apart.
   const strokes = new Map<string, [Pt, Pt][]>();
   graph.forEachEdge((_e, a, src, tgt) => {
-    if (!isHierarchyKind(a.kind)) return;
+    if (!isStructureKind(a.kind, opts.index.settings)) return;
     const g1 = anchorOf.get(src);
     if (!g1 || g1 !== anchorOf.get(tgt)) return;
     const p1 = sigma.graphToViewport(graph.getNodeAttributes(src));

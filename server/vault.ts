@@ -195,7 +195,7 @@ export async function buildGraph(vaultPath: string, label?: string, slug?: strin
       title: firstH1(body) ?? stem,
       type,
       status: typeof data.status === "string" ? data.status : null,
-      archived: data._archived === true,
+      archived: data._archived === true || data.archived === true,
       organized: data._organized === true,
       folder,
       summary: firstParagraph(body),

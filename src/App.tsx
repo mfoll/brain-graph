@@ -3,7 +3,7 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
-import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type PaletteId } from "./graph/home";
+import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { VaultManager } from "./components/VaultManager";
 
@@ -160,8 +160,10 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`brain-graph.grouping.${data.vault.slug}`);
       if (raw) {
-        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string };
-        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE };
+        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string; roles?: Record<string, string> };
+        const roles: Record<string, LinkRole> = {};
+        for (const [k, r] of Object.entries(v.roles ?? {})) if (r === "up" || r === "down" || r === "lateral") roles[k] = r;
+        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE, roles };
       }
     } catch {
       /* ignore */
@@ -172,7 +174,7 @@ export default function App() {
   const setHomeSettings = (next: HomeSettings) => {
     setHomeSettingsState(next);
     try {
-      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE }));
+      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE, roles: next.roles ?? {} }));
     } catch {
       /* ignore */
     }
@@ -351,9 +353,9 @@ export default function App() {
 
   // Hierarchy pull is an edge attribute read by the layout on every step.
   useEffect(() => {
-    if (graph) applyEdgeWeights(graph, layoutSettings.ratio);
-    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.ratio);
-  }, [graph, filteredGraph, layoutSettings.ratio]);
+    if (graph) applyEdgeWeights(graph, layoutSettings.ratio, homeSettings ?? undefined);
+    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.ratio, homeSettings ?? undefined);
+  }, [graph, filteredGraph, layoutSettings.ratio, homeSettings]);
 
   // Colours are node attributes, so switching mode never rebuilds the renderer.
   useEffect(() => {

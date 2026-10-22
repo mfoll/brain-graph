@@ -2,7 +2,7 @@ import Graph from "graphology";
 import { circular } from "graphology-layout";
 import type { VaultGraph } from "../types";
 import { UNTYPED_COLOR, normalizeColor } from "./colors";
-import { homeColor, shapeFor, type HomeIndex, type HomeLevel } from "./home";
+import { homeColor, isStructureKind, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
 
 export interface NodeAttrs {
   label: string;
@@ -31,11 +31,9 @@ export interface EdgeAttrs {
   [key: string]: unknown;
 }
 
-/** Structure links say where a note belongs; every other relationship is lateral context. */
-export const isHierarchyKind = (kind: string) => kind === "belongs_to" || kind === "has" || kind.startsWith("parent_");
 /** Body wikilinks are the noisiest lateral links and count for less than a declared relationship. */
 const LATERAL_FACTOR: Record<string, number> = { body: 0.4 };
-export const edgeWeight = (kind: string, ratio = 6) => (isHierarchyKind(kind) ? ratio : LATERAL_FACTOR[kind] ?? 1);
+export const edgeWeight = (kind: string, ratio = 6, settings?: Pick<HomeSettings, "roles">) => (isStructureKind(kind, settings) ? ratio : LATERAL_FACTOR[kind] ?? 1);
 
 /** Layout parameters the user can tune; see the Layout section of the sidebar. */
 export interface LayoutSettings {
@@ -51,10 +49,10 @@ export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, ratio:
 /** Visual weight of lateral links by ratio: 1 at ratio 1 (same as structure), 0.5 at the default 6, 0.1 at 10. */
 export const lateralEmphasis = (ratio: number) => 0.1 + 0.9 * Math.max(0, Math.min(1, (10 - ratio) / 9));
 
-export function applyEdgeWeights(graph: BrainGraph, ratioInput: number): void {
+export function applyEdgeWeights(graph: BrainGraph, ratioInput: number, settings?: Pick<HomeSettings, "roles">): void {
   const ratio = Number.isFinite(ratioInput) && ratioInput > 0 ? ratioInput : DEFAULT_LAYOUT.ratio;
   const lateral = lateralEmphasis(ratio);
-  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, ratio), emphasis: isHierarchyKind(a.kind) ? 1 : lateral }), { attributes: ["weight", "emphasis"] });
+  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, ratio, settings), emphasis: isStructureKind(a.kind, settings) ? 1 : lateral }), { attributes: ["weight", "emphasis"] });
 }
 
 /**
@@ -169,7 +167,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   }
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: isHierarchyKind(e.kind) ? 1 : lateralEmphasis(DEFAULT_LAYOUT.ratio) });
+      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: isStructureKind(e.kind) ? 1 : lateralEmphasis(DEFAULT_LAYOUT.ratio) });
     }
   }
   // Seed positions deterministically so a first layout is reproducible between reloads.
