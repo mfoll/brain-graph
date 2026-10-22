@@ -371,14 +371,14 @@ export function Sidebar(p: Props) {
             )}
           </span>
         </header>
-        <div className="muted small hint">Changes apply live in a short run. Groups form because hierarchy links pull harder than lateral ones; spread and gravity set how far everything sits apart.</div>
-        <label className="row column" title="Repulsion between notes (ForceAtlas2 scalingRatio).">
+        <div className="muted small hint">Changes apply live in a short run. The map always fills the same frame; these settings change how notes are distributed within it.</div>
+        <label className="row column" title="Display only: multiplies every node's size.">
           <span>
-            Spread: <strong>{ls.spread}</strong>
+            Node size: <strong>{ls.nodeScale}×</strong>
           </span>
-          <input type="range" min={2} max={40} step={1} value={ls.spread} onChange={(e) => onLayoutSettings({ ...ls, spread: Number(e.target.value) })} />
+          <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
         </label>
-        <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart.">
+        <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
           <span>
             Gravity: <strong>{ls.gravity}</strong>
           </span>

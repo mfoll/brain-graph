@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
+import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 
@@ -249,6 +249,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    if (next.nodeScale !== layoutSettings.nodeScale && JSON.stringify({ ...next, nodeScale: 0 }) === JSON.stringify({ ...layoutSettings, nodeScale: 0 })) return; // display only
     if (tuneTimer.current) clearTimeout(tuneTimer.current);
     tuneTimer.current = setTimeout(() => {
       setLayoutRun(null);
@@ -267,7 +268,10 @@ export default function App() {
     if (!built.restored) setLayoutRun("scratch");
     else if (built.fresh.length > 0) setLayoutRun("settle");
   }, [built]);
+  // Which link kinds the last layout run used: toggling kinds changes the forces but does not re-run.
+  const layoutKinds = useRef<Set<string> | null>(null);
   const onLayoutStopped = (positions: Positions) => {
+    layoutKinds.current = new Set(filters.kinds);
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
     setLayoutRun(null);
@@ -292,6 +296,11 @@ export default function App() {
     });
     return g;
   }, [graph, data, filters.kinds]);
+
+  // Node size multiplier is a display setting: no run needed.
+  useEffect(() => {
+    if (filteredGraph) applyNodeScale(filteredGraph, layoutSettings.nodeScale);
+  }, [filteredGraph, layoutSettings.nodeScale]);
 
   // Hierarchy pull is an edge attribute read by the layout on every step.
   useEffect(() => {
@@ -494,6 +503,7 @@ export default function App() {
   if (filters.recency) stateParts.push("faded by recency");
   if (!filters.hideArchived) stateParts.push("archived shown");
   if (filters.focusDepth) stateParts.push(`depth ${filters.focusDepth} around selection`);
+  const kindsChanged = layoutKinds.current !== null && (layoutKinds.current.size !== filters.kinds.size || [...filters.kinds].some((k) => !layoutKinds.current!.has(k)));
   const selectedNode = selected ? byId.get(selected) : null;
   const visibleCount = data.nodes.length - hidden.size;
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
@@ -573,9 +583,22 @@ export default function App() {
         </div>
         {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
-      {stateParts.length > 0 && (
+      {(stateParts.length > 0 || kindsChanged) && (
         <div className="stateline">
-          <span>{stateParts.join(" · ")}</span>
+          <span>
+            {stateParts.join(" · ")}
+            {kindsChanged && (
+              <>
+                {stateParts.length > 0 && " · "}
+                <span title="The visible link kinds changed since the last layout run; the positions still reflect the previous set.">
+                  links changed since the last layout ·{" "}
+                  <button className="link small" onClick={() => void recompute(false)}>
+                    recompute
+                  </button>
+                </span>
+              </>
+            )}
+          </span>
           <button
             className="link small"
             onClick={() =>
@@ -648,7 +671,6 @@ export default function App() {
           focusRequest={focusRequest}
           fitRequest={fitRequest}
           cameraStore={cameraStore}
-          layoutFits={layoutRun === "scratch"}
         />
         {hoveredNode && pointer && (
           <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>

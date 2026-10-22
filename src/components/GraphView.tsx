@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { collectPositions, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
+import { MAP_EXTENT, collectPositions, normalizePositions, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { clearHulls, drawHulls, type HullOptions } from "../graph/hulls";
 
@@ -39,8 +39,6 @@ export interface GraphViewProps {
   fitRequest: number;
   /** Camera state shared across renderer instances (theme switches remount the view). */
   cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
-  /** Refit the frame to the visible notes while the layout runs (first layout of a vault only). */
-  layoutFits: boolean;
 }
 
 type GS = { focusActive: boolean; labelsAlways: boolean };
@@ -102,6 +100,9 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
           graph.forEachNode((n, a) => before.set(n, [a.x, a.y]));
         }
         forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
+        // Keep the map at its fixed extent (so physics never changes the scale of the picture), then
+        // cap each node's displacement for this frame.
+        normalizePositions(graph);
         if (Number.isFinite(cap)) {
           graph.updateEachNodeAttributes(
             (n, a) => {
@@ -319,24 +320,12 @@ export function GraphView(props: GraphViewProps) {
     if (import.meta.env.DEV) Object.assign(window as unknown as Record<string, unknown>, { __layout: layout, __fa2: forceAtlas2, __graph: graph });
     layoutRef.current = layout;
 
-    // Fit the camera's reference frame to the visible nodes only, so hidden or far-flung
-    // orphans do not shrink the interesting part of the graph into a dot.
+    // The map is normalised to MAP_EXTENT around 0 on every layout frame, so the frame is fixed once:
+    // nothing ever refits, node sizes stay constant, and "Fit" is just a smooth camera move.
+    const half = MAP_EXTENT / 2 + MAP_EXTENT * 0.06;
+    sigma.setCustomBBox({ x: [-half, half], y: [-half, half] });
     const fitToVisible = () => {
-      const { hidden } = propsRef.current;
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, n = 0;
-      graph.forEachNode((node, a) => {
-        if (hidden.has(node)) return;
-        n++;
-        if (a.x < minX) minX = a.x;
-        if (a.x > maxX) maxX = a.x;
-        if (a.y < minY) minY = a.y;
-        if (a.y > maxY) maxY = a.y;
-      });
-      if (n < 2) return sigma.setCustomBBox(null);
-      const padX = (maxX - minX) * 0.05 || 1;
-      const padY = (maxY - minY) * 0.05 || 1;
-      sigma.setCustomBBox({ x: [minX - padX, maxX + padX], y: [minY - padY, maxY + padY] });
-      sigma.scheduleRefresh();
+      /* kept for the Helpers contract; the frame is fixed */
     };
 
     // Expose the helpers to the effects below through the instance.
@@ -362,7 +351,7 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart, layoutFits, layoutMaxStep, layoutSettings: ls } = props;
+    const { graph, layoutPins, layoutDuration, layoutStart, layoutMaxStep, layoutSettings: ls } = props;
     const reset = () =>
       Object.assign(layout, {
         iterations: 1,
@@ -370,21 +359,15 @@ export function GraphView(props: GraphViewProps) {
         settings: {
           ...layout.settings,
           slowDown: layoutStart,
-          scalingRatio: ls.spread,
           gravity: ls.gravity,
           linLogMode: ls.separateGroups,
           adjustSizes: ls.preventOverlap,
         },
       });
-    // Only a first layout refits the frame; a nudge or a settle keeps the view exactly where it is.
-    const maybeFit = () => {
-      if (layoutFits) fit();
-    };
     const stop = () => {
       layout.stop();
       reset();
       if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
-      maybeFit();
       propsRef.current.onLayoutProgress?.(0);
       propsRef.current.onLayoutStopped(collectPositions(graph));
     };
@@ -403,7 +386,6 @@ export function GraphView(props: GraphViewProps) {
         layout.iterations = sched.iterations;
         layout.maxStep = sched.maxStep;
         propsRef.current.onLayoutProgress?.(progress);
-        maybeFit();
       }, 250);
       const t = setTimeout(stop, layoutDuration);
       return () => {
@@ -451,7 +433,7 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout || !layout.isRunning()) return;
     const ls = props.layoutSettings;
-    Object.assign(layout.settings, { scalingRatio: ls.spread, gravity: ls.gravity, linLogMode: ls.separateGroups, adjustSizes: ls.preventOverlap });
+    Object.assign(layout.settings, { gravity: ls.gravity, linLogMode: ls.separateGroups, adjustSizes: ls.preventOverlap });
   }, [props.layoutSettings]);
 
   // Label policy. The label grid is only rebuilt on render, so refresh explicitly. While all labels
@@ -494,8 +476,7 @@ export function GraphView(props: GraphViewProps) {
     const sigma = sigmaRef.current;
     if (!sigma || !props.fitRequest || props.fitRequest === handledFit.current) return;
     handledFit.current = props.fitRequest;
-    (sigma as unknown as Helpers).__fit();
-    void sigma.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1, angle: 0 }, { duration: 450 });
+    void sigma.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1, angle: 0 }, { duration: 500 });
   }, [props.fitRequest]);
 
   return <div ref={containerRef} className="graph-canvas" />;

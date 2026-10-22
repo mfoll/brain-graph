@@ -35,8 +35,8 @@ export const edgeWeight = (kind: string, hierarchyWeight = 4) => (isHierarchyKin
 
 /** Layout parameters the user can tune; see the Layout section of the sidebar. */
 export interface LayoutSettings {
-  /** ForceAtlas2 scalingRatio: repulsion between notes. Higher = more spread. */
-  spread: number;
+  /** Node size multiplier (display only). */
+  nodeScale: number;
   /** ForceAtlas2 gravity: pull towards the centre. Lower = groups drift apart. */
   gravity: number;
   /** Weight of belongs_to / has / parent_* links relative to a related_to link. Higher = tighter groups. */
@@ -46,7 +46,7 @@ export interface LayoutSettings {
   /** adjustSizes: notes do not overlap, groups become less dense. */
   preventOverlap: boolean;
 }
-export const DEFAULT_LAYOUT: LayoutSettings = { spread: 10, gravity: 1, hierarchyWeight: 4, separateGroups: false, preventOverlap: false };
+export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, hierarchyWeight: 4, separateGroups: false, preventOverlap: false };
 
 export function applyEdgeWeights(graph: BrainGraph, hierarchyWeight: number): void {
   graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, hierarchyWeight) }), { attributes: ["weight"] });
@@ -80,6 +80,39 @@ export function typeColorMap(data: VaultGraph): Map<string, string> {
 
 export type Positions = Record<string, [number, number]>;
 
+/** The map always occupies this extent (graph units), centred on 0: the frame never has to change. */
+export const MAP_EXTENT = 1000;
+
+/**
+ * Rescale all positions so the robust bounding box (2nd to 98th percentile, so a few far-flung
+ * notes cannot shrink the rest) spans MAP_EXTENT and is centred on 0. Uniform scale, no distortion.
+ */
+export function normalizePositions(graph: BrainGraph): void {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  graph.forEachNode((_n, a) => {
+    xs.push(a.x);
+    ys.push(a.y);
+  });
+  if (xs.length < 2) return;
+  xs.sort((a, b) => a - b);
+  ys.sort((a, b) => a - b);
+  const q = (arr: number[], p: number) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
+  const x0 = q(xs, 0.02), x1 = q(xs, 0.98), y0 = q(ys, 0.02), y1 = q(ys, 0.98);
+  const span = Math.max(x1 - x0, y1 - y0) || 1;
+  const k = MAP_EXTENT / span;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  if (Math.abs(k - 1) < 1e-6 && Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) return;
+  graph.updateEachNodeAttributes((_n, a) => ({ ...a, x: (a.x - cx) * k, y: (a.y - cy) * k }), { attributes: ["x", "y"] });
+}
+
+/** Base node size from link count, times a user scale. */
+export const nodeSize = (degree: number, scale = 1) => (2.5 + Math.min(14, Math.sqrt(degree) * 1.15)) * scale;
+
+export function applyNodeScale(graph: BrainGraph, scale: number): void {
+  graph.updateEachNodeAttributes((_n, a) => ({ ...a, size: nodeSize(a.degree, scale) }), { attributes: ["size"] });
+}
+
 export interface BuiltGraph {
   graph: BrainGraph;
   /** Nodes that had no saved position and were placed heuristically. */
@@ -111,7 +144,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       shape: "circle",
       home: n.home,
       recency: 1,
-      size: 2.5 + Math.min(14, Math.sqrt(degree) * 1.15),
+      size: nodeSize(degree),
       degree,
       x: 0,
       y: 0,
@@ -173,6 +206,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
     }
   }
   const restored = applied >= graph.order / 2;
+  normalizePositions(graph);
   return { graph, fresh: restored ? fresh : [], restored };
 }
 
