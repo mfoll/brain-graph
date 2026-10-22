@@ -7,8 +7,8 @@ import chokidar from "chokidar";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildGraph, slugify, type VaultGraph } from "./vault.ts";
-import type { VaultInfo } from "../shared/types.ts";
+import { firstH1, buildGraph, slugify, type VaultGraph } from "./vault.ts";
+import type { Bridge, VaultInfo } from "../shared/types.ts";
 
 export interface VaultApiOptions {
   /** Extra vault to serve (typically from the VAULT env var); registered Tolaria vaults are added automatically. */
@@ -18,6 +18,8 @@ export interface VaultApiOptions {
   label?: string;
   /** Tolaria vault slug used in tolaria://<slug>/<path> deep links. Defaults to a slugified label. */
   slug?: string;
+  /** Frontmatter keys whose values are paths into another registered vault (default archive_record, archive_records). */
+  bridgeKeys?: string[];
   /** Directory for the saved layout sidecars (one per vault slug). Defaults to ~/.config/brain-graph/layouts. */
   layoutDir?: string;
   /** Tolaria registry; defaults to the macOS location. */
@@ -196,11 +198,52 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
     });
     watchers.set(info.slug, watcher);
   };
+  // Cross-vault pointers: a path listed under a bridge key is looked up in every other registered vault
+  // (as <path>/record.md, <path>.md or <path>); the target's H1 becomes the bridge node's label.
+  const bridgeKeys = opts.bridgeKeys ?? ["archive_record", "archive_records"];
+  const resolveBridges = async (data: VaultGraph, all: VaultInfo[]): Promise<Bridge[]> => {
+    const others = all.filter((v) => v.slug !== data.vault.slug);
+    const found = new Map<string, Promise<{ vault: string; path: string; title: string } | null>>();
+    const lookup = (raw: string) => {
+      const p = raw.trim().replace(/^\/+/, "").replace(/\/record\.md$/, "").replace(/\.md$/, "");
+      if (!p) return Promise.resolve(null);
+      let hit = found.get(p);
+      if (!hit) {
+        hit = (async () => {
+          for (const v of others) {
+            for (const rel of [`${p}/record.md`, `${p}.md`, p]) {
+              const file = path.join(v.path, rel);
+              const text = await fs.readFile(file, "utf8").catch(() => null);
+              if (text === null) continue;
+              const body = text.startsWith("---") ? text.split(/^---\s*$/m, 3)[2] ?? text : text;
+              return { vault: v.slug, path: rel, title: firstH1(body) ?? path.basename(p) };
+            }
+          }
+          return null;
+        })();
+        found.set(p, hit);
+      }
+      return hit;
+    };
+    const out: Bridge[] = [];
+    for (const n of data.nodes) {
+      for (const key of bridgeKeys) {
+        const value = n.properties[key];
+        const raws = Array.isArray(value) ? value : value ? [value] : [];
+        for (const raw of raws) {
+          if (typeof raw !== "string") continue;
+          const t = await lookup(raw);
+          if (t) out.push({ from: n.id, ...t, kind: raw.trim().replace(/^\/+/, "").split("/")[0] || "record" });
+        }
+      }
+    }
+    return out;
+  };
   const graph = (info: VaultInfo) => {
     watch(info);
     let g = caches.get(info.slug);
     if (!g) {
-      g = buildGraph(info.path, info.label, info.slug);
+      g = buildGraph(info.path, info.label, info.slug).then(async (data) => ({ ...data, bridges: await resolveBridges(data, await vaults()) }));
       caches.set(info.slug, g);
     }
     return g;

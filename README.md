@@ -28,7 +28,7 @@ It is a standalone companion, not a Tolaria extension: it reads the vault folder
 
 **Note panel.** The note's Markdown rendered with callouts, tables and vault images; wikilinks navigate the map. A Links tab groups relationships by kind, a Members tab lists a group's notes by type, and a **why?** link on the breadcrumb shows the exact chain the viewer followed to assign the note. Back and forward arrows replay your path. **Open in Tolaria** uses the `tolaria://<vault>/<path>.md` deep link.
 
-**Audit views.** The Groups tree ends with **Unassigned**, the notes whose chain reaches no group. **Show missing link targets** draws every wikilink target that is no note (a typo, a renamed note, a template placeholder) as a grey ghost node linked from the notes that mention it. Filters hide archived notes and orphans, keep only notes with at least N visible links (skeleton view; group notes always stay), collapse one leaf type such as Sources into a `+N` count on its parent, and fade notes by time since last edit.
+**Audit views.** The Groups tree ends with **Unassigned**, the notes whose chain reaches no group. **Show missing link targets** draws every wikilink target that is no note (a typo, a renamed note, a template placeholder) as a grey ghost node linked from the notes that mention it. **Show archive records** is the bridge to another vault: a note's `archive_records` (or `archive_record`) paths are looked up in the other registered vaults and drawn as rectangles in the colour of the Project that lists them, labelled with the record's title; clicking one opens it in Tolaria in its own vault. It shows at a glance which Projects have produced papers and grants and which records two Projects share. Filters hide archived notes and orphans, keep only notes with at least N visible links (skeleton view; group notes always stay), collapse one leaf type such as Sources into a `+N` count on its parent, and fade notes by time since last edit.
 
 **Layout.** ForceAtlas2, stepped a few iterations per animation frame and cooled so nodes come to rest within the run. Positions are saved per vault when a run stops, so the map is stable between sessions; new notes settle next to their links while the rest stays put. **Update layout** nudges the current map for under a second; **Reset layout** redoes it from scratch in a few seconds and keeps a backup of the previous map. Nodes are not draggable: hand placement would not survive the next run.
 
@@ -80,6 +80,7 @@ The defaults follow Tolaria and the Second Brain template; each is a per-vault s
 | Type colours when no groups exist | `_color` on `type: Type` notes | the vault's Type notes |
 | Archived notes | `_archived: true` or `archived: true` | Settings → Filters |
 | Deep links | `tolaria://<slug>/<path>.md`, slug from the vault label | `VAULT_SLUG` |
+| Cross-vault pointers (bridge to an archive vault) | `archive_records`, `archive_record`: paths into another registered vault | `bridgeKeys` in the server options |
 
 The `has` fallback exists because vaults use `has` for selective entry points rather than ownership: in the vault pictured above, 299 notes would have been homed through `has` alone before `belongs_to` was given priority. The root, exempt and Person rules follow the template's hierarchy contract (its ADR on `belongs_to` roots), so the viewer and the template's [hierarchy audit](https://github.com/mfoll/second-brain-template) agree on homes; the `graph:homes` command below prints what the viewer infers, from the same code.
 
@@ -124,7 +125,7 @@ Issues and pull requests are welcome. Keep vault assumptions configurable rather
 
 ## Status
 
-Working and in daily use since October 2026 on a 1,300-note vault. Vaults are shown one at a time; a bridge view of cross-vault pointers is on the backlog. The Tolaria deep-link slug is inferred from the vault label rather than read from Tolaria's registry.
+Working and in daily use since October 2026 on a 1,300-note vault. Vaults are shown one at a time; the archive-records toggle is the only cross-vault view. The Tolaria deep-link slug is inferred from the vault label rather than read from Tolaria's registry.
 
 ## Licence
 

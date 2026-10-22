@@ -101,6 +101,7 @@ function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters
     regionSize: v.regionSize ?? 1,
     linkOpacity: v.linkOpacity ?? 0.55,
     ghosts: v.ghosts ?? false,
+    bridges: v.bridges ?? false,
     linkWidth: v.linkWidth ?? 1,
     labelThreshold: v.labelThreshold ?? 7,
     types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
@@ -271,6 +272,7 @@ export default function App() {
     linkWidth: 1,
     labelThreshold: 7,
     ghosts: false,
+    bridges: false,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -393,10 +395,10 @@ export default function App() {
     if (!graph || !data) return null;
     const g = graph.copy();
     g.forEachEdge((e, a) => {
-      if (a.kind === "missing" ? !filters.ghosts : !filters.kinds.has(a.kind)) g.dropEdge(e);
+      if (a.kind === "missing" ? !filters.ghosts : a.kind === "archive" ? !filters.bridges : !filters.kinds.has(a.kind)) g.dropEdge(e);
     });
     return g;
-  }, [graph, data, filters.kinds, filters.ghosts]);
+  }, [graph, data, filters.kinds, filters.ghosts, filters.bridges]);
 
   // Node size multiplier is a display setting: no run needed.
   useEffect(() => {
@@ -451,6 +453,7 @@ export default function App() {
       else if (filters.hideArchived && n.archived) set.add(n.id);
     }
     if (!filters.ghosts) filteredGraph.forEachNode((n, a) => void (a.ghost && set.add(n)));
+    if (!filters.bridges) filteredGraph.forEachNode((n, a) => void (a.bridge && set.add(n)));
     if (filters.minDegree > 0) {
       // Skeleton view: drop notes with too few visible links, iterating since removals lower others' degrees.
       let changed = true;
@@ -650,6 +653,12 @@ export default function App() {
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
   const clickGraph = (id: string | null) => {
     if (id && filteredGraph?.getNodeAttribute(id, "ghost")) return;
+    const bridge = id ? filteredGraph?.getNodeAttribute(id, "bridge") : undefined;
+    if (bridge) {
+      // A record of another vault has no note here: open it where it lives.
+      window.location.href = `tolaria://${bridge.vault}/${bridge.path.split("/").map(encodeURIComponent).join("/")}`;
+      return;
+    }
     setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
     select(id);
   };
@@ -700,6 +709,7 @@ export default function App() {
   if (filters.collapseType) stateParts.push({ label: `${filters.collapseType} collapsed`, title: `${filters.collapseType} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseType: null })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
+  if (filters.bridges) stateParts.push({ label: "archive records shown", title: "Records of another vault listed under archive_records are drawn as rectangles.", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
   if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Wikilink targets that are no note are drawn as grey ghost nodes.", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
   if (filters.focusDepth) stateParts.push({ label: `depth ${filters.focusDepth} around selection`, title: "Only the selected note's neighbourhood is shown.", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });

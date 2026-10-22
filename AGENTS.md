@@ -24,6 +24,7 @@ Instructions for a coding agent asked to install, run or use Brain Graph for a u
 - Brain Graph's state lives in `~/.config/brain-graph/`: `vaults.json` (the vault list, also edited from the app) and `layouts/<slug>.json` with a `.prev.json` backup. Mention this when uninstalling or when a user asks what it stored. Nothing else is written outside the npm cache.
 - The server binds to `127.0.0.1` only. Do not expose it on another interface or behind a tunnel without the user asking.
 - Vaults registered in Tolaria are served automatically when its registry exists; this is read-only and optional. Do not edit Tolaria's registry.
+- Cross-vault pointers (`archive_records`, `archive_record` paths) are resolved by reading the target vault's `record.md` title; the viewer reads the other vault, nothing more.
 - `graph:homes` and `graph:dump` print the vault's structure to the terminal; that output may contain note titles and summaries. Treat it like the vault's content when deciding where it may be pasted.
 
 ## Commands useful to an agent

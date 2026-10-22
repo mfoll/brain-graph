@@ -35,7 +35,7 @@ function splitFrontmatter(text: string): { data: Record<string, unknown>; body: 
   return { data, body };
 }
 
-function firstH1(body: string): string | null {
+export function firstH1(body: string): string | null {
   const m = body.match(/^#\s+(.+?)\s*$/m);
   return m ? m[1].trim() : null;
 }

@@ -22,6 +22,8 @@ export interface NodeAttrs {
   folder: string;
   /** Target of a wikilink that resolves to no note (shown behind Filters → missing targets). */
   ghost?: boolean;
+  /** A note of another vault this vault points to (Filters → archive records); `via` is the first pointing note. */
+  bridge?: { vault: string; path: string; via: string };
   [key: string]: unknown;
 }
 export interface EdgeAttrs {
@@ -68,6 +70,11 @@ export function applyColors(graph: BrainGraph, level: HomeLevel, index: HomeInde
   graph.updateEachNodeAttributes((id, a) => {
     const note = byId.get(id);
     const shape = shapeFor(a.type, index.settings);
+    if (a.bridge) {
+      // A bridge takes the colour of the note that points at it and keeps its rectangle.
+      const via = byId.get(a.bridge.via);
+      return { ...a, color: via && !noGroups ? homeColor(via, index, level) : a.typeColor, shape: "rectangle" };
+    }
     if (noGroups || !note) return { ...a, color: a.typeColor, shape };
     return { ...a, color: homeColor(note, index, level), shape };
   }, { attributes: ["color", "shape"] });
@@ -185,8 +192,19 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       graph.updateNodeAttribute(id, "degree", (d) => (d as number) + 1);
     }
   }
+  // Cross-vault bridges: one rectangle per target record, linked by an "archive" edge from each pointing note.
+  for (const b of data.bridges ?? []) {
+    if (!graph.hasNode(b.from)) continue;
+    const id = `bridge:${b.vault}/${b.path}`;
+    if (!graph.hasNode(id)) graph.addNode(id, { label: b.title, type: `(${b.kind})`, color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "rectangle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", bridge: { vault: b.vault, path: b.path, via: b.from } });
+    const key = `${b.from}|archive|${id}`;
+    if (!graph.hasEdge(key)) {
+      graph.addEdgeWithKey(key, b.from, id, { kind: "archive", weight: edgeWeight("archive"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });
+      graph.updateNodeAttribute(id, "degree", (d) => (d as number) + 1);
+    }
+  }
   graph.forEachNode((id, a) => {
-    if (a.ghost) graph.setNodeAttribute(id, "size", nodeSize(a.degree));
+    if (a.ghost || a.bridge) graph.setNodeAttribute(id, "size", nodeSize(a.degree));
   });
   // Seed positions deterministically so a first layout is reproducible between reloads.
   circular.assign(graph, { scale: 100 });

@@ -47,6 +47,20 @@ export interface VaultGraph {
   types: TypeInfo[];
   edgeKinds: { kind: string; count: number }[];
   unresolved: { from: string; raw: string }[];
+  /** Notes of other registered vaults that this vault points to by path (see VaultApiOptions.bridgeKeys). */
+  bridges?: Bridge[];
+}
+
+export interface Bridge {
+  /** Pointing note in this vault. */
+  from: string;
+  /** Slug of the vault that holds the target. */
+  vault: string;
+  /** Target file, relative to that vault, with its .md extension (as a tolaria:// link wants it). */
+  path: string;
+  title: string;
+  /** First path segment (papers, grants…), used as the node's type label. */
+  kind: string;
 }
 
 export interface VaultInfo {
