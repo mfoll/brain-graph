@@ -235,9 +235,12 @@ export function subtreeMembers(root: string, data: VaultGraph, index: HomeIndex)
   return out;
 }
 
-export const TYPE_SHAPES: Record<string, string> = {
-  Project: "diamond",
-  Responsibility: "square",
-  Topic: "square",
-  Question: "triangle",
-};
+/** Node shapes for group types, in the order the types were selected; every other note is a circle. */
+export const GROUP_SHAPES = ["diamond", "square", "triangle", "rectangle"] as const;
+export const SHAPE_GLYPH: Record<string, string> = { diamond: "◆", square: "■", triangle: "▲", rectangle: "▬", circle: "●" };
+
+export function shapeFor(type: string | null, settings: HomeSettings): string {
+  if (!type) return "circle";
+  const i = [...settings.hubTypes].indexOf(type);
+  return i < 0 ? "circle" : GROUP_SHAPES[i % GROUP_SHAPES.length];
+}

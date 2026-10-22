@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
-import type { ColorMode } from "../graph/build";
-import { TYPE_SHAPES, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
-
-const SHAPE_GLYPH: Record<string, string> = { diamond: "◆", square: "■", triangle: "▲", circle: "●" };
-const glyphFor = (type: string) => SHAPE_GLYPH[TYPE_SHAPES[type] ?? "circle"];
+import { SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -34,9 +30,8 @@ interface Props {
   /** Default hub types for this vault (depends on its ontology). */
   homeDefaults: string[];
   onHomeSettings: (s: HomeSettings) => void;
-  colorMode: ColorMode;
   homeLevel: HomeLevel;
-  onColorMode: (mode: ColorMode, level: HomeLevel) => void;
+  onHomeLevel: (level: HomeLevel) => void;
   edgeKinds: { kind: string; count: number }[];
   filters: Filters;
   onChange: (f: Filters) => void;
@@ -49,7 +44,8 @@ interface Props {
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, typeColors, homeIndex, homeSettings, homeDefaults, colorMode, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub } = p;
+  const { data, types, homeIndex, homeSettings, homeDefaults, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub } = p;
+  const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
   const [showGrouping, setShowGrouping] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
 
@@ -118,11 +114,9 @@ export function Sidebar(p: Props) {
             {hub.children.length ? (open ? "▾" : "▸") : ""}
           </button>
           <button className="tree-label" onClick={() => onFocusHub(id)} title={`${hub.type} · ${hub.subtreeCount} notes · click to focus this group and open its note, click again to unfocus`}>
-            {colorMode === "home" ? (
-              <span className="swatch" style={{ background: homeIndex.palettes[homeLevel].get(id), borderRadius: hub.type === "Project" ? 2 : "50%" }} />
-            ) : (
-              <span className="glyph muted">{glyphFor(hub.type)}</span>
-            )}
+            <span className="glyph" style={{ color: homeIndex.palettes[homeLevel].get(id) }} title={hub.type}>
+              {glyphFor(hub.type)}
+            </span>
             <span className="name">{hub.title}</span>
             <span className="count">{hub.subtreeCount}</span>
           </button>
@@ -134,7 +128,7 @@ export function Sidebar(p: Props) {
 
   return (
     <aside className="sidebar" ref={asideRef}>
-      <section className={colorMode === "home" ? "colour-source" : ""}>
+      <section>
         <header>
           <h2>Home</h2>
           <span className="header-tools">
@@ -143,19 +137,14 @@ export function Sidebar(p: Props) {
                 unfocus
               </button>
             )}
-            <button className={`pill-toggle${colorMode === "home" ? " on" : ""}`} onClick={() => p.onColorMode("home", homeLevel)} title="Colour the graph by home group">
-              {colorMode === "home" ? "● colouring" : "colour by this"}
-            </button>
           </span>
         </header>
-        {colorMode === "home" && (
-          <label className="row column">
-            <span>
-              Roll up to: <strong>{LEVEL_LABELS[homeLevel]}</strong>
-            </span>
-            <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onColorMode("home", Number(e.target.value) as HomeLevel)} />
-          </label>
-        )}
+        <label className="row column" title="Colours follow the groups: pick how far up the hierarchy a note takes its colour from.">
+          <span>
+            Colour by group, rolled up to: <strong>{LEVEL_LABELS[homeLevel]}</strong>
+          </span>
+          <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
+        </label>
         <label className="row" title="Regions and names follow this section: the grouping types and the roll-up level above. A region is the union of a soft disc around each visible note of the group. Its name is shown when at least four of its notes are visible; names are placed largest group first and nudged up or down to avoid each other. Names fade while something is hovered or focused, and shrink while all note labels are shown.">
           <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
           Group regions and names
@@ -181,13 +170,15 @@ export function Sidebar(p: Props) {
         {showGrouping && (
           <div className="grouping">
             <div className="muted small">
-              Types that act as groups. A note joins the nearest one reached through its <code>belongs_to</code> (or <code>parent_*</code>) chain. Default for this vault: {homeDefaults.join(", ")}.
+              Types that act as groups, each drawn with its own shape in the order picked; other notes are circles. A note joins the nearest group reached through its <code>belongs_to</code> (or{" "}
+              <code>parent_*</code>) chain. Default for this vault: {homeDefaults.join(", ")}.
             </div>
             <div className="chips">
               {types
                 .filter((t) => t.name !== "Type" && t.name !== "(untyped)")
                 .map((t) => (
-                  <button key={t.name} className={`chip${homeSettings.hubTypes.has(t.name) ? " on" : ""}`} onClick={() => toggleHubType(t.name)}>
+                  <button key={t.name} className={`chip${homeSettings.hubTypes.has(t.name) ? " on" : ""}`} onClick={() => toggleHubType(t.name)} title={homeSettings.hubTypes.has(t.name) ? `Drawn as ${glyphFor(t.name)}` : "Make this type a group"}>
+                    {homeSettings.hubTypes.has(t.name) ? `${glyphFor(t.name)} ` : ""}
                     {t.name}
                   </button>
                 ))}
@@ -201,7 +192,7 @@ export function Sidebar(p: Props) {
         <ul className="tree">{homeIndex.roots.map(renderHub)}</ul>
       </section>
 
-      <section className={colorMode === "type" ? "colour-source" : ""}>
+      <section>
         <header>
           <h2>Types</h2>
           <span className="header-tools">
@@ -215,12 +206,11 @@ export function Sidebar(p: Props) {
                 show all
               </button>
             )}
-            <button className={`pill-toggle${colorMode === "type" ? " on" : ""}`} onClick={() => p.onColorMode("type", homeLevel)} title="Colour the graph by note type">
-              {colorMode === "type" ? "● colouring" : "colour by this"}
-            </button>
           </span>
         </header>
-        {colorMode === "home" && <div className="muted small hint">Shapes while colouring by home: ◆ project · ■ responsibility/topic · ▲ question · ● other</div>}
+        <div className="muted small hint">
+          Shapes: {[...homeSettings.hubTypes].map((t) => `${glyphFor(t)} ${t}`).join(" · ")} · ● other
+        </div>
         <ul className="legend">
           {types.map((t) => {
             const on = filters.types.has(t.name);
@@ -234,7 +224,7 @@ export function Sidebar(p: Props) {
                     {open ? "▾" : "▸"}
                   </button>
                   <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes · click to focus this type, click again to unfocus`}>
-                    {colorMode === "type" ? <span className="swatch" style={{ background: typeColors.get(t.name) }} /> : <span className="glyph muted">{glyphFor(t.name)}</span>}
+                    <span className="glyph muted">{glyphFor(t.name)}</span>
                     <span className="name">{t.name}</span>
                     <span className="count">{t.count}</span>
                   </button>

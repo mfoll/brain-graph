@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
-import { sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
+import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { collectPositions, type BrainGraph, type EdgeAttrs, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
@@ -130,7 +130,7 @@ export function GraphView(props: GraphViewProps) {
     const sigma = new Sigma<NodeAttrs, EdgeAttrs, Record<string, unknown>, NS, {}, GS>(graph, container, {
       customGraphState: { focusActive: false, labelsAlways: propsRef.current.showLabels },
       // Sigma only registers the circle by default; declare the shapes used for note types.
-      primitives: { nodes: { shapes: [sdfCircle(), sdfSquare(), sdfDiamond(), sdfTriangle()] } },
+      primitives: { nodes: { shapes: [sdfCircle(), sdfSquare(), sdfDiamond(), sdfTriangle(), sdfRectangle()] } },
       customNodeState: { isSelected: false },
       settings: {
         allowInvalidContainer: true, // the pane may be hidden (0x0) on first mount; we resize below

@@ -2,7 +2,7 @@ import Graph from "graphology";
 import { circular } from "graphology-layout";
 import type { VaultGraph } from "../types";
 import { UNTYPED_COLOR, normalizeColor } from "./colors";
-import { TYPE_SHAPES, homeColor, type HomeIndex, type HomeLevel } from "./home";
+import { homeColor, shapeFor, type HomeIndex, type HomeLevel } from "./home";
 
 export interface NodeAttrs {
   label: string;
@@ -32,17 +32,20 @@ export interface EdgeAttrs {
 const EDGE_WEIGHTS: Record<string, number> = { belongs_to: 4, has: 4, surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
 export const edgeWeight = (kind: string) => EDGE_WEIGHTS[kind] ?? (kind.startsWith("parent_") ? 4 : 1.5);
 
-export type ColorMode = "type" | "home";
-
-/** Recolour (and reshape) nodes in place; Sigma picks the attribute changes up without a rebuild. */
-export function applyColors(graph: BrainGraph, mode: ColorMode, level: HomeLevel, data: VaultGraph, index: HomeIndex): void {
+/**
+ * Recolour (and reshape) nodes in place; Sigma picks the attribute changes up without a rebuild.
+ * Colour comes from the home grouping; when the vault has no group notes at all, the Type colours
+ * from its Type notes are used instead so the graph is never uniformly grey.
+ */
+export function applyColors(graph: BrainGraph, level: HomeLevel, index: HomeIndex): void {
   const byId = index.byId;
+  const noGroups = index.hubs.size === 0;
   graph.updateEachNodeAttributes((id, a) => {
     const note = byId.get(id);
-    if (mode === "type" || !note) return { ...a, color: a.typeColor, shape: "circle" };
-    return { ...a, color: homeColor(note, index, level), shape: TYPE_SHAPES[a.type] ?? "circle" };
+    const shape = shapeFor(a.type, index.settings);
+    if (noGroups || !note) return { ...a, color: a.typeColor, shape };
+    return { ...a, color: homeColor(note, index, level), shape };
   }, { attributes: ["color", "shape"] });
-  void data;
 }
 
 export type BrainGraph = Graph<NodeAttrs, EdgeAttrs>;

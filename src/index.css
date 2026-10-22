@@ -98,7 +98,7 @@ button { font: inherit; color: inherit; }
 .pill-toggle { border: 1px solid var(--border); background: none; color: var(--muted); border-radius: 999px; padding: 1px 8px; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .pill-toggle:hover { border-color: var(--accent); color: var(--fg); }
 .pill-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.glyph { width: 12px; flex: none; text-align: center; font-size: 10px; line-height: 1; }
+.glyph { width: 14px; flex: none; text-align: center; font-size: 11px; line-height: 1; }
 .hint { padding: 0 6px 6px; }
 .sidebar section.colour-source > header h2 { color: var(--fg); }
 .sidebar h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }

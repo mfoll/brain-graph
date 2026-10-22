@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { applyColors, buildGraph, neighborhood, typeColorMap, type ColorMode, type Positions } from "./graph/build";
+import { applyColors, buildGraph, neighborhood, typeColorMap, type Positions } from "./graph/build";
 import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 
@@ -150,7 +150,6 @@ export default function App() {
   const homeIndex = useMemo(() => (data && homeSettings && homeSettingsVault === data.vault.slug ? buildHomeIndex(data, homeSettings) : null), [data, homeSettings, homeSettingsVault]);
   const byId = useMemo(() => new Map(data?.nodes.map((n) => [n.id, n]) ?? []), [data]);
 
-  const [colorMode, setColorMode] = useState<ColorMode>("home");
   const [homeLevel, setHomeLevel] = useState<HomeLevel>(1);
 
   const [filters, setFilters] = useState<Filters>({
@@ -228,8 +227,8 @@ export default function App() {
 
   // Colours are node attributes, so switching mode never rebuilds the renderer.
   useEffect(() => {
-    if (filteredGraph && data && homeIndex) applyColors(filteredGraph, colorMode, homeLevel, data, homeIndex);
-  }, [filteredGraph, data, homeIndex, colorMode, homeLevel]);
+    if (filteredGraph && homeIndex) applyColors(filteredGraph, homeLevel, homeIndex);
+  }, [filteredGraph, homeIndex, homeLevel]);
 
   // Labels carry the folded Source count; opacity carries recency. Both are plain attributes.
   useEffect(() => {
@@ -418,12 +417,8 @@ export default function App() {
         homeSettings={homeSettings}
         homeDefaults={vaultDefaults}
         onHomeSettings={setHomeSettings}
-        colorMode={colorMode}
         homeLevel={homeLevel}
-        onColorMode={(mode, level) => {
-          setColorMode(mode);
-          setHomeLevel(level);
-        }}
+        onHomeLevel={setHomeLevel}
         edgeKinds={data.edgeKinds}
         filters={filters}
         onChange={setFilters}
