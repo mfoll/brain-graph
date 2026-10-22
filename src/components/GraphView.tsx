@@ -24,6 +24,8 @@ export interface GraphViewProps {
   showLabels: boolean;
   /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
   spotlight: Set<string> | null;
+  /** Focused group whose name is always drawn. */
+  emphasisHub?: string | null;
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
   onLayoutStopped: (positions: Positions) => void;
@@ -205,6 +207,7 @@ export function GraphView(props: GraphViewProps) {
         halo: propsRef.current.theme.background,
         dim: sigma.getGraphState().focusActive,
         quiet: propsRef.current.showLabels, // note labels are on: group names step back
+        emphasis: propsRef.current.emphasisHub ?? null,
       });
     };
     sigma.on("afterRender", redrawHulls);
@@ -408,7 +411,7 @@ export function GraphView(props: GraphViewProps) {
   // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
   useEffect(() => {
     (sigmaRef.current as unknown as { __redrawHulls?: () => void } | null)?.__redrawHulls?.();
-  }, [props.hulls, props.hidden, props.graph, props.showLabels]);
+  }, [props.hulls, props.hidden, props.graph, props.showLabels, props.emphasisHub]);
 
   // Camera: centre on a requested node.
   useEffect(() => {

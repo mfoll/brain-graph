@@ -448,6 +448,7 @@ export default function App() {
           hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
           showLabels={filters.labels}
           spotlight={spotlight}
+          emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}
           onHover={(node, pos) => {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);

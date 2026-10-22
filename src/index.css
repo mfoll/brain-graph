@@ -108,7 +108,9 @@ button { font: inherit; color: inherit; }
   padding: 4px 6px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left;
 }
 .legend li > button:hover { background: var(--panel-2); }
-.legend li.off > .tree-line .tree-label { opacity: .4; }
+.legend li.off > .tree-line .tree-label, .legend li.off > .tree-label { opacity: .4; }
+.legend li.off > .tree-label .name { text-decoration: line-through; text-decoration-color: var(--muted); }
+.legend li.off > .tree-label .count::after { content: " hidden"; }
 .legend li.off > .tree-line .iso.on { opacity: 1; color: var(--muted); }
 .legend .name { flex: 1; }
 .count { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }

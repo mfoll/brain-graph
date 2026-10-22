@@ -156,6 +156,11 @@ export function Sidebar(p: Props) {
             <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onColorMode("home", Number(e.target.value) as HomeLevel)} />
           </label>
         )}
+        <label className="row" title="Regions and names follow this section: the grouping types and the roll-up level above. A region is the union of a soft disc around each visible note of the group. Its name is shown when at least four of its notes are visible; names are placed largest group first and nudged up or down to avoid each other. Names fade while something is hovered or focused, and shrink while all note labels are shown.">
+          <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
+          Group regions and names
+          <span className="muted small"> · follow the grouping and level above</span>
+        </label>
         {(() => {
           const isDefault = homeSettings.useHas && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
           return (
@@ -275,8 +280,8 @@ export function Sidebar(p: Props) {
             const on = filters.kinds.has(k.kind);
             const st = edgeStyle(k.kind);
             return (
-              <li key={k.kind} className={on ? "" : "off"} title="Click to toggle, Alt-click to isolate">
-                <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)}>
+              <li key={k.kind} className={on ? "" : "off"}>
+                <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)} title={on ? "Click to hide these links (Alt-click: show only this kind)" : "Click to show these links again"}>
                   <span className="edge-swatch" style={{ background: st.color, height: Math.max(1, st.width) }} />
                   <span className="name">
                     {k.kind}
@@ -305,10 +310,6 @@ export function Sidebar(p: Props) {
         <label className="row" title="Labels are otherwise shown only for hovered or selected notes and their neighbours.">
           <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
           Show all note labels
-        </label>
-        <label className="row" title="Draw a tinted region with the group's name behind each home group at the current roll-up level.">
-          <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
-          Show group hulls
         </label>
         <label className="row" title="Sources are 44% of the notes and almost all leaves. Fold them into a +N count on the note they belong to.">
           <input type="checkbox" checked={filters.collapseSources} onChange={(e) => onChange({ ...filters, collapseSources: e.target.checked })} />

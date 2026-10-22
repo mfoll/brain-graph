@@ -12,6 +12,8 @@ export interface HullOptions {
   halo: string;
   dim: boolean; // true while a node is hovered / selected: fade the hulls
   quiet?: boolean; // note labels are shown: draw group names smaller and lighter
+  /** Hub whose name must always be drawn (the focused group), even with few notes or when crowded. */
+  emphasis?: string | null;
 }
 
 type Pt = { x: number; y: number };
@@ -92,10 +94,10 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
       octx.arc(p.x, p.y, p.r + pad, 0, Math.PI * 2);
     }
     octx.fill();
-    if (pts.length >= 4) {
+    if (pts.length >= 4 || anchor === opts.emphasis) {
       const x = median(pts.map((p) => p.x));
       const y = Math.min(height - 16, Math.max(16, median(pts.map((p) => p.y))));
-      labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: pts.length });
+      labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: anchor === opts.emphasis ? Infinity : pts.length });
     }
   }
 
@@ -108,16 +110,34 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   fctx.textAlign = "center";
   fctx.textBaseline = "middle";
   fctx.lineJoin = "round";
-  // Largest groups are placed first; a name whose box would overlap an already placed one is skipped.
+  // Largest groups are placed first. A name that would overlap an already placed one is nudged up or
+  // down (a few steps) before being given up; the emphasised group is never given up.
   const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  const overlaps = (b: { x0: number; y0: number; x1: number; y1: number }) => placed.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
   for (const l of labels.sort((a, b) => b.n - a.n)) {
-    const size = Math.round((opts.quiet ? 10 : 12) + Math.min(opts.quiet ? 8 : 12, Math.log2(l.n) * (opts.quiet ? 1.1 : 1.6)));
+    const n = Number.isFinite(l.n) ? l.n : 64;
+    const size = Math.round((opts.quiet ? 10 : 12) + Math.min(opts.quiet ? 8 : 12, Math.log2(n) * (opts.quiet ? 1.1 : 1.6)));
     fctx.font = `700 ${size}px Inter, system-ui, sans-serif`;
     const w = fctx.measureText(l.text).width + 12;
-    // Keep the whole name inside the canvas.
     l.x = Math.min(width - w / 2 - 4, Math.max(w / 2 + 4, l.x));
-    const box = { x0: l.x - w / 2, y0: l.y - size * 0.75, x1: l.x + w / 2, y1: l.y + size * 0.75 };
-    if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+    const h = size * 0.75;
+    const step = size * 1.6;
+    let box = { x0: l.x - w / 2, y0: l.y - h, x1: l.x + w / 2, y1: l.y + h };
+    let ok = !overlaps(box);
+    for (let k = 1; !ok && k <= 3; k++) {
+      for (const dy of [k * step, -k * step]) {
+        const y = Math.min(height - h, Math.max(h, l.y + dy));
+        const cand = { x0: l.x - w / 2, y0: y - h, x1: l.x + w / 2, y1: y + h };
+        if (!overlaps(cand)) {
+          box = cand;
+          l.y = y;
+          ok = true;
+          break;
+        }
+      }
+    }
+    if (!ok && !Number.isFinite(l.n)) ok = true; // emphasised: draw anyway
+    if (!ok) continue;
     placed.push(box);
     fctx.lineWidth = Math.max(4, size / 3);
     fctx.strokeStyle = opts.halo;
