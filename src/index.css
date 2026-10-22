@@ -267,3 +267,19 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 999px; }
 .chip-x:hover { background: var(--panel-2); color: var(--fg); }
 .row.indent { margin-left: 22px; }
+
+/* Vault manager */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 50; }
+.modal { width: min(560px, 92vw); max-height: 85vh; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 18px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.modal header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.modal h2 { margin: 0; font-size: 16px; }
+.vault-list { list-style: none; margin: 8px 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; }
+.vault-list li { display: flex; align-items: center; border-bottom: 1px solid var(--border); }
+.vault-list li:last-child { border-bottom: 0; }
+.vault-list li.current { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.vault-list .tree-label { padding: 8px 10px; }
+.vault-list .iso { opacity: 1; margin-right: 8px; }
+.path-inline { word-break: break-all; }
+.add-vault { display: grid; grid-template-columns: 1fr 160px auto; gap: 6px; margin: 10px 0 6px; }
+.add-vault input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--fg); font: inherit; }
+.error-text { color: #ef4444; margin-bottom: 6px; }

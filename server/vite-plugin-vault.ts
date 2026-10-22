@@ -16,6 +16,14 @@ export interface VaultPluginOptions {
   layoutDir?: string;
   /** Tolaria registry; defaults to the macOS location. */
   registryPath?: string;
+  /** Brain Graph's own registry of manually added vaults; defaults to ~/.config/brain-graph/vaults.json. */
+  configPath?: string;
+}
+
+interface ManualRegistry {
+  vaults: { label: string; path: string }[];
+  /** Include the vaults registered in Tolaria (default true when a registry exists). */
+  useTolaria: boolean;
 }
 
 export interface SavedLayout {
@@ -40,34 +48,82 @@ interface TolariaRegistry {
   default_workspace_path?: string;
 }
 
-/** Vaults the server is allowed to serve: the env vault (if any) plus Tolaria's registered, mounted vaults. */
+const configFile = (opts: VaultPluginOptions) => expand(opts.configPath ?? path.join(os.homedir(), ".config", "brain-graph", "vaults.json"));
+
+async function readManual(opts: VaultPluginOptions): Promise<ManualRegistry> {
+  try {
+    const v = JSON.parse(await fs.readFile(configFile(opts), "utf8")) as Partial<ManualRegistry>;
+    return { vaults: Array.isArray(v.vaults) ? v.vaults : [], useTolaria: v.useTolaria !== false };
+  } catch {
+    return { vaults: [], useTolaria: true };
+  }
+}
+async function writeManual(opts: VaultPluginOptions, reg: ManualRegistry): Promise<void> {
+  const file = configFile(opts);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(reg, null, 2));
+}
+
+/** A folder counts as a vault when it exists and holds at least one Markdown file (shallow or one level down). */
+async function looksLikeVault(dir: string): Promise<boolean> {
+  try {
+    if (!(await fs.stat(dir)).isDirectory()) return false;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    if (entries.some((e) => e.isFile() && e.name.endsWith(".md"))) return true;
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith(".")) continue;
+      const sub = await fs.readdir(path.join(dir, e.name)).catch(() => []);
+      if (sub.some((f) => f.endsWith(".md"))) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Vaults the server is allowed to serve: folders added by hand (Brain Graph's own registry), Tolaria's
+ * registered and mounted vaults when that import is on, and the env vault (if any).
+ */
 async function discoverVaults(opts: VaultPluginOptions): Promise<VaultInfo[]> {
   const out = new Map<string, VaultInfo>();
+  const manual = await readManual(opts);
   const registryPath = opts.registryPath ?? path.join(os.homedir(), "Library", "Application Support", "com.tolaria.app", "vaults.json");
   let registry: TolariaRegistry = {};
-  try {
-    registry = JSON.parse(await fs.readFile(registryPath, "utf8")) as TolariaRegistry;
-  } catch {
-    // no Tolaria registry: only the env vault is served
+  if (manual.useTolaria) {
+    try {
+      registry = JSON.parse(await fs.readFile(registryPath, "utf8")) as TolariaRegistry;
+    } catch {
+      // no Tolaria registry
+    }
   }
   for (const v of registry.vaults ?? []) {
     if (v.mounted === false) continue;
     const p = expand(v.path);
-    try {
-      if (!(await fs.stat(p)).isDirectory()) continue;
-    } catch {
-      continue;
-    }
-    out.set(p, { slug: slugify(v.label), label: v.label, path: p, isDefault: registry.default_workspace_path ? expand(registry.default_workspace_path) === p : false });
+    if (!(await looksLikeVault(p))) continue;
+    out.set(p, { slug: slugify(v.label), label: v.label, path: p, isDefault: registry.default_workspace_path ? expand(registry.default_workspace_path) === p : false, source: "tolaria" });
+  }
+  for (const v of manual.vaults) {
+    const p = expand(v.path);
+    if (!(await looksLikeVault(p))) continue;
+    const existing = out.get(p);
+    out.set(p, { slug: slugify(v.label), label: v.label, path: p, isDefault: existing?.isDefault ?? false, source: "manual" });
   }
   if (opts.vaultPath) {
     const p = expand(opts.vaultPath);
     const existing = out.get(p);
     const label = opts.label ?? existing?.label ?? path.basename(p);
-    out.set(p, { slug: opts.slug ?? existing?.slug ?? slugify(label), label, path: p, isDefault: true });
+    out.set(p, { slug: opts.slug ?? existing?.slug ?? slugify(label), label, path: p, isDefault: true, source: "env" });
     for (const v of out.values()) if (v.path !== p) v.isDefault = false;
   }
   const list = [...out.values()];
+  // Slugs must be unique: disambiguate collisions with a numeric suffix.
+  const seen = new Map<string, number>();
+  for (const v of list) {
+    const n = (seen.get(v.slug) ?? 0) + 1;
+    seen.set(v.slug, n);
+    if (n > 1) v.slug = `${v.slug}-${n}`;
+  }
   if (list.length && !list.some((v) => v.isDefault)) list[0].isDefault = true;
   return list;
 }
@@ -135,9 +191,35 @@ export function vaultPlugin(opts: VaultPluginOptions = {}): Plugin {
         for (const w of watchers.values()) void w.close();
       });
 
-      server.middlewares.use("/api/vaults", async (_req, res) => {
+      // Registry: GET lists {vaults, useTolaria, tolariaAvailable}; POST {path,label?} adds a folder;
+      // DELETE ?path= removes a manually added folder; PUT {useTolaria} toggles the Tolaria import.
+      server.middlewares.use("/api/vaults", async (req, res) => {
         try {
-          json(res, await vaults());
+          const manual = await readManual(opts);
+          const tolariaAvailable = await fs
+            .stat(opts.registryPath ?? path.join(os.homedir(), "Library", "Application Support", "com.tolaria.app", "vaults.json"))
+            .then(() => true)
+            .catch(() => false);
+          if (req.method === "POST") {
+            const body = JSON.parse(await readBody(req)) as { path?: string; label?: string };
+            const p = expand(body.path ?? "");
+            if (!body.path || !(await looksLikeVault(p))) return json(res, { error: "That folder does not exist or holds no Markdown notes." }, 400);
+            if (!manual.vaults.some((v) => expand(v.path) === p)) manual.vaults.push({ path: p, label: body.label?.trim() || path.basename(p) });
+            await writeManual(opts, manual);
+            vaultsPromise = null;
+          } else if (req.method === "DELETE") {
+            const url = new URL(req.url ?? "", "http://localhost");
+            const p = expand(url.searchParams.get("path") ?? "");
+            manual.vaults = manual.vaults.filter((v) => expand(v.path) !== p);
+            await writeManual(opts, manual);
+            vaultsPromise = null;
+          } else if (req.method === "PUT") {
+            const body = JSON.parse(await readBody(req)) as { useTolaria?: boolean };
+            if (typeof body.useTolaria === "boolean") manual.useTolaria = body.useTolaria;
+            await writeManual(opts, manual);
+            vaultsPromise = null;
+          }
+          json(res, { vaults: await vaults(), useTolaria: manual.useTolaria, tolariaAvailable, configPath: configFile(opts) });
         } catch (err) {
           json(res, { error: String(err) }, 500);
         }

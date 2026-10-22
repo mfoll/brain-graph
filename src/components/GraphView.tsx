@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
+import { drawOnCanvas } from "@sigma/export-image";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { MAP_EXTENT, collectPositions, normalizePositions, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
@@ -37,6 +38,9 @@ export interface GraphViewProps {
   onLayoutProgress?: (progress: number) => void;
   focusRequest: { node: string; nonce: number } | null;
   fitRequest: number;
+  /** Export request: a change triggers a PNG download of the current view. */
+  exportRequest: number;
+  onExported?: (ok: boolean, message?: string) => void;
   /** Camera state shared across renderer instances (theme switches remount the view). */
   cameraStore: React.MutableRefObject<{ x: number; y: number; ratio: number; angle: number } | null>;
 }
@@ -142,6 +146,8 @@ type Helpers = {
   __fit: () => void;
   /** Re-apply whatever should be lit when nothing is hovered: the selection, else the spotlight, else nothing. */
   __restore: () => void;
+  /** Render the current view (background, regions, graph, names) to a PNG blob at `scale` × the screen pixels. */
+  __exportPng: (scale: number) => Promise<Blob>;
 };
 
 export function GraphView(props: GraphViewProps) {
@@ -334,6 +340,46 @@ export function GraphView(props: GraphViewProps) {
     ext.__clear = clearHighlight;
     ext.__fit = fitToVisible;
     ext.__restore = restore;
+    ext.__exportPng = async (scale: number) => {
+      const { width, height } = sigma.getDimensions();
+      const dpr = (window.devicePixelRatio || 1) * scale;
+      const out = document.createElement("canvas");
+      out.width = Math.round(width * dpr);
+      out.height = Math.round(height * dpr);
+      const ctx = out.getContext("2d")!;
+      ctx.fillStyle = propsRef.current.theme.background;
+      ctx.fillRect(0, 0, out.width, out.height);
+      // Regions and names are redrawn at export resolution on scratch canvases.
+      const h = propsRef.current.hulls;
+      const back = document.createElement("canvas");
+      const front = document.createElement("canvas");
+      if (h) {
+        const fakeDims = { getDimensions: () => ({ width, height }) };
+        const proxy = new Proxy(sigma as unknown as Record<string, unknown>, {
+          get: (t, k) => (k in fakeDims ? (fakeDims as Record<string, unknown>)[k as string] : (t as Record<string, unknown>)[k as string]),
+        }) as unknown as Sigma;
+        const saved = window.devicePixelRatio;
+        Object.defineProperty(window, "devicePixelRatio", { value: dpr, configurable: true });
+        try {
+          drawHulls(proxy, graph, back, front, { ...h, halo: propsRef.current.theme.background, dim: false, quiet: propsRef.current.showLabels, emphasis: propsRef.current.emphasisHub ?? null });
+        } finally {
+          Object.defineProperty(window, "devicePixelRatio", { value: saved, configurable: true });
+        }
+        ctx.drawImage(back, 0, 0, out.width, out.height);
+      }
+      // The graph itself: a temporary renderer at export resolution, same camera and styles.
+      const graphCanvas = await drawOnCanvas(sigma as unknown as Sigma, {
+        width: out.width,
+        height: out.height,
+        backgroundColor: "rgba(0,0,0,0)",
+        sigmaOverrides: {
+          settings: (st) => ({ ...st, labelRenderedSizeThreshold: (st.labelRenderedSizeThreshold ?? 7) * scale }),
+        },
+      });
+      ctx.drawImage(graphCanvas, 0, 0, out.width, out.height);
+      if (h) ctx.drawImage(front, 0, 0, out.width, out.height);
+      return new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
+    };
 
     return () => {
       container.removeEventListener("mousemove", onMove);
@@ -470,6 +516,25 @@ export function GraphView(props: GraphViewProps) {
     const p = sigma.graphToFramedGraph({ x: a.x, y: a.y });
     void sigma.getCamera().animate({ x: p.x, y: p.y }, { duration: 400 });
   }, [props.focusRequest]);
+
+  const handledExport = useRef(0);
+  useEffect(() => {
+    const sigma = sigmaRef.current as unknown as Helpers | null;
+    if (!sigma || !props.exportRequest || props.exportRequest === handledExport.current) return;
+    handledExport.current = props.exportRequest;
+    sigma
+      .__exportPng(2)
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+        a.download = `brain-graph-${propsRef.current.hulls?.data.vault.slug ?? "vault"}-${stamp}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        propsRef.current.onExported?.(true);
+      })
+      .catch((e) => propsRef.current.onExported?.(false, String(e)));
+  }, [props.exportRequest]);
 
   useEffect(() => {
     const sigma = sigmaRef.current;

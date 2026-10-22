@@ -13,6 +13,7 @@
     "graph:homes": "node server/homes.ts"
   },
   "dependencies": {
+    "@sigma/export-image": "^4.0.0",
     "chokidar": "^6.0.0",
     "dompurify": "^3.4.17",
     "graphology": "^0.26.0",

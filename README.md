@@ -1,6 +1,8 @@
 # Brain Graph
 
-Interactive graph view of a Markdown Second Brain vault (Tolaria-style: frontmatter `type`, wikilink relationships), rendered in WebGL with nodes coloured by note Type.
+Interactive graph view of a Markdown Second Brain vault (Tolaria-style: frontmatter `type`, wikilink relationships), rendered in WebGL, with notes coloured and grouped by the project or responsibility they belong to.
+
+![The work vault with group regions, coloured by nearest group, related_to links hidden](docs/brain-graph-second-brain.webp)
 
 Tolaria has no graph view and no plugin system (maintainer answer in refactoringhq/tolaria#587), so this is a standalone companion that reads the vault folder directly.
 
@@ -12,6 +14,7 @@ Tolaria has no graph view and no plugin system (maintainer answer in refactoring
 - Group regions and names: a tinted region behind each home group at the current roll-up level: a disc around each visible member note plus thick rounded strokes along the hierarchy links inside the group, so a cluster reads as one shape; padding is in map units so regions scale with zoom, with a size slider. The group's name sits at its median position. A name appears when at least four of the group's notes are visible; names are placed largest group first and nudged up or down to avoid each other; the focused group is always named. Regions and names fade while something is hovered or focused and follow the grouping types and roll-up level. Regions and names are separate toggles in Settings.
 - The Home tree ends with an **Unassigned** row: notes whose chain reaches no group; focus it to see them. A selected group's panel has a **Members** tab (its notes by type), and every note's breadcrumb has a **why?** link showing the exact chain of relationships the viewer followed.
 - Panel navigation: back and forward arrows replay the notes you opened; Escape unfocuses, then closes the panel. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…) with one **clear** link.
+- **Export PNG** downloads the current view (background, regions, graph, names) at twice the screen resolution; PNG because the renderer is WebGL and the regions are raster, so there is no vector form to export.
 - Shareable URL: `?vault=…&note=…&focus=hub:genesis|type:Question|unassigned&level=0|2` is kept up to date, so a Tolaria note or an agent report can link straight into a view.
 - A **Layout physics** section exposes node size, gravity, group pull (weight of hierarchy links) and LinLog group separation, remembered per vault and applied live in a 0.75-second run so the effect is visible at once. Nodes cannot be dragged: hand placement does not survive the next layout run.
 - Type facets: an expanded Type row lists the values of a frontmatter key found on its notes (`status` by default; any scalar key shared by enough notes can be picked), each clickable to focus those notes, e.g. Questions with `status = Open`. Nothing is specific to one vault's vocabulary.
@@ -33,7 +36,7 @@ pnpm install
 pnpm dev
 ```
 
-Then open <http://localhost:5178>. Every vault registered and mounted in Tolaria (read from `~/Library/Application Support/com.tolaria.app/vaults.json`) appears in the dropdown at the top left; Tolaria's default workspace is selected first and your last choice is remembered. Each vault has its own graph, saved layout, filters and grouping default: the Second Brain ontology gets Project / Responsibility / Topic, the Scientific Production Archive gets Paper / Grant (the types most often on the receiving end of `parent_*` and `belongs_to` links). Only the selected vault is read; the others are not parsed until you switch to them.
+Then open <http://localhost:5178>. The dropdown at the top left lists your vaults; **Manage vaults…** opens a dialog to add a folder by path (any folder of Markdown notes), remove one, and choose whether to include the vaults registered in Tolaria (read from `~/Library/Application Support/com.tolaria.app/vaults.json` when present; Tolaria is optional). The list is stored in `~/.config/brain-graph/vaults.json`. Your last choice is remembered. Each vault has its own graph, saved layout, filters and grouping default: the Second Brain ontology gets Project / Responsibility / Topic, the Scientific Production Archive gets Paper / Grant (the types most often on the receiving end of `parent_*` and `belongs_to` links). Only the selected vault is read; the others are not parsed until you switch to them.
 
 Without Tolaria, or to add a vault that is not registered, start with `VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev`; that vault becomes the default. Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label.
 

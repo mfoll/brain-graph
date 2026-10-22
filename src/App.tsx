@@ -5,6 +5,7 @@ import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { buildHomeIndex, defaultHubTypes, subtreeMembers, type HomeLevel, type HomeSettings } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
+import { VaultManager } from "./components/VaultManager";
 
 function useTheme() {
   const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -97,7 +98,8 @@ const paramToSpotlight = (v: string | null): Spotlight => {
 const initialUrl = new URLSearchParams(window.location.search);
 
 export default function App() {
-  const { vaults, error: vaultsError } = useVaults();
+  const { vaults, registry, error: vaultsError, addVault, removeVault, setUseTolaria } = useVaults();
+  const [manageVaults, setManageVaults] = useState(false);
   const [vaultSlug, setVaultSlugState] = useState<string | null>(() => {
     if (initialUrl.get("vault")) return initialUrl.get("vault");
     try {
@@ -225,6 +227,8 @@ export default function App() {
   const [layoutProgress, setLayoutProgress] = useState(0);
   const [focusRequest, setFocusRequest] = useState<{ node: string; nonce: number } | null>(null);
   const [fitRequest, setFitRequest] = useState(0);
+  const [exportRequest, setExportRequest] = useState(0);
+  const [exportState, setExportState] = useState<"idle" | "busy" | "error">("idle");
   const [query, setQuery] = useState("");
 
   // Layout physics, remembered per vault.
@@ -488,7 +492,12 @@ export default function App() {
   };
 
   if (error || vaultsError) return <div className="status error">Could not load the vault graph: {error ?? vaultsError}</div>;
-  if (vaults && vaults.length === 0) return <div className="status error">No vault to show: register one in Tolaria or start with VAULT=~/path/to/vault.</div>;
+  if (vaults && vaults.length === 0 && registry)
+    return (
+      <div className="status">
+        <VaultManager registry={registry} current={null} onSelect={setVaultSlug} onAdd={addVault} onRemove={removeVault} onUseTolaria={setUseTolaria} onClose={() => undefined} />
+      </div>
+    );
   if (!data || !graph || !filteredGraph || !homeIndex || !homeSettings) return <div className="status">Parsing vault…</div>;
 
   const hoveredNode = hovered ? byId.get(hovered) : null;
@@ -534,17 +543,19 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          {vaults && vaults.length > 1 ? (
-            <select className="vault-select" value={data.vault.slug} onChange={(e) => setVaultSlug(e.target.value)} title={data.vault.path}>
-              {vaults.map((v) => (
-                <option key={v.slug} value={v.slug}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <strong>{data.vault.label}</strong>
-          )}
+          <select
+            className="vault-select"
+            value={data.vault.slug}
+            onChange={(e) => (e.target.value === "__manage__" ? setManageVaults(true) : setVaultSlug(e.target.value))}
+            title={`${data.vault.path} · choose a vault or manage the list`}
+          >
+            {(vaults ?? []).map((v) => (
+              <option key={v.slug} value={v.slug}>
+                {v.label}
+              </option>
+            ))}
+            <option value="__manage__">Manage vaults…</option>
+          </select>
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
             {saved.layout && !layoutRun && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
@@ -597,6 +608,17 @@ export default function App() {
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
+          <button
+            className="button"
+            disabled={exportState === "busy"}
+            onClick={() => {
+              setExportState("busy");
+              setExportRequest((n) => n + 1);
+            }}
+            title="Download the current view as a PNG at twice the screen resolution (background, regions, graph, names; the sidebar and panel are not included)"
+          >
+            {exportState === "busy" ? "Exporting…" : exportState === "error" ? "Export failed" : "Export PNG"}
+          </button>
           <button className="button" onClick={reload} title={`Parsed ${new Date(data.generatedAt).toLocaleTimeString()}`}>↻</button>
           <button className="button" onClick={theme.toggle} title="Toggle theme">{theme.dark ? "☀" : "☾"}</button>
         </div>
@@ -683,6 +705,8 @@ export default function App() {
           onLayoutProgress={setLayoutProgress}
           focusRequest={focusRequest}
           fitRequest={fitRequest}
+          exportRequest={exportRequest}
+          onExported={(ok) => setExportState(ok ? "idle" : "error")}
           cameraStore={cameraStore}
         />
         {hoveredNode && pointer && (
@@ -701,6 +725,20 @@ export default function App() {
         )}
       </main>
 
+      {manageVaults && registry && (
+        <VaultManager
+          registry={registry}
+          current={data.vault.slug}
+          onSelect={(slug) => {
+            setVaultSlug(slug);
+            setManageVaults(false);
+          }}
+          onAdd={addVault}
+          onRemove={removeVault}
+          onUseTolaria={setUseTolaria}
+          onClose={() => setManageVaults(false)}
+        />
+      )}
       {selectedNode && <div className={`gutter gutter-right${panel.dragging ? " active" : ""}`} onMouseDown={panel.startDrag} title="Drag to resize the panel" />}
       {selectedNode && (
         <NotePanel

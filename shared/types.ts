@@ -55,4 +55,6 @@ export interface VaultInfo {
   label: string;
   path: string;
   isDefault: boolean;
+  /** Where the entry comes from: added by hand, imported from Tolaria's registry, or the VAULT env var. */
+  source: "manual" | "tolaria" | "env";
 }

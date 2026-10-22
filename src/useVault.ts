@@ -9,17 +9,31 @@ export interface SavedLayout {
 
 const q = (slug: string | null) => (slug ? `vault=${encodeURIComponent(slug)}` : "");
 
-/** Vaults the server can serve (Tolaria's registry plus the VAULT env vault). */
+export interface VaultRegistry {
+  vaults: VaultInfo[];
+  useTolaria: boolean;
+  tolariaAvailable: boolean;
+  configPath: string;
+}
+
+/** Vaults the server can serve: folders added by hand, Tolaria's registry when imported, the VAULT env vault. */
 export function useVaults() {
-  const [vaults, setVaults] = useState<VaultInfo[] | null>(null);
+  const [registry, setRegistry] = useState<VaultRegistry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const apply = async (r: Response) => {
+    const body = (await r.json()) as VaultRegistry & { error?: string };
+    if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+    setRegistry(body);
+  };
   useEffect(() => {
     fetch("/api/vaults")
-      .then((r) => (r.ok ? (r.json() as Promise<VaultInfo[]>) : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setVaults)
+      .then(apply)
       .catch((e) => setError(String(e)));
   }, []);
-  return { vaults, error };
+  const addVault = (path: string, label?: string) => fetch("/api/vaults", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, label }) }).then(apply);
+  const removeVault = (path: string) => fetch(`/api/vaults?path=${encodeURIComponent(path)}`, { method: "DELETE" }).then(apply);
+  const setUseTolaria = (useTolaria: boolean) => fetch("/api/vaults", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ useTolaria }) }).then(apply);
+  return { vaults: registry?.vaults ?? null, registry, error, addVault, removeVault, setUseTolaria };
 }
 
 export function useVault(slug: string | null) {
