@@ -264,6 +264,7 @@ export default function App() {
       if (raw) {
         const v = JSON.parse(raw) as Partial<LayoutSettings> & Record<string, unknown>;
         next = { ...DEFAULT_LAYOUT, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULT_LAYOUT)) } as LayoutSettings;
+        if (typeof v.hierarchyWeight === "number" && !("structurePull" in v)) next.structurePull = v.hierarchyWeight; // older saves
       }
     } catch {
       /* ignore */
@@ -344,9 +345,9 @@ export default function App() {
 
   // Hierarchy pull is an edge attribute read by the layout on every step.
   useEffect(() => {
-    if (graph) applyEdgeWeights(graph, layoutSettings.hierarchyWeight);
-    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.hierarchyWeight);
-  }, [graph, filteredGraph, layoutSettings.hierarchyWeight]);
+    if (graph) applyEdgeWeights(graph, layoutSettings.structurePull, layoutSettings.lateralPull);
+    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.structurePull, layoutSettings.lateralPull);
+  }, [graph, filteredGraph, layoutSettings.structurePull, layoutSettings.lateralPull]);
 
   // Colours are node attributes, so switching mode never rebuilds the renderer.
   useEffect(() => {
@@ -649,14 +650,10 @@ export default function App() {
         <div className="toolbar">
           <button
             className="button"
-            onClick={(e) => void recompute(e.altKey)}
-            title={
-              layoutRun
-                ? "Stop now and keep the current positions"
-                : "Nudge the layout from the current positions (under a second, cools down and saves by itself). Alt-click to lay the whole map out again from scratch (8 s), for example after a poor first layout."
-            }
+            onClick={() => void recompute(false)}
+            title={layoutRun ? "Stop now and keep the current positions" : "Update the layout from the current positions (under a second, saves by itself). A full redo from scratch is in Settings → Layout → Reset layout."}
           >
-            {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
+            {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Update layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
           <button
@@ -728,6 +725,7 @@ export default function App() {
         layoutRunning={layoutRun !== null}
         canRestoreLayout={!!saved.layout?.hasPrevious}
         onRestoreLayout={() => void restorePreviousLayout()}
+        onResetLayout={() => void recompute(true)}
       />
 
       <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />

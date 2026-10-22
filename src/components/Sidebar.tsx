@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
 import { SHAPE_GLYPH, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub } from "../graph/home";
-import { DEFAULT_LAYOUT, type LayoutSettings } from "../graph/build";
+import { DEFAULT_LAYOUT, isHierarchyKind, type LayoutSettings } from "../graph/build";
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -53,6 +53,7 @@ interface Props {
   layoutRunning: boolean;
   canRestoreLayout: boolean;
   onRestoreLayout: () => void;
+  onResetLayout: () => void;
 }
 
 
@@ -382,6 +383,7 @@ export function Sidebar(p: Props) {
                       <span className="name">
                         {k.kind}
                         {st.directed ? " →" : ""}
+                        <span className="muted small"> · {isHierarchyKind(k.kind) ? "structure" : "lateral"}</span>
                       </span>
                       <span className="count">{k.count}</span>
                     </button>
@@ -441,24 +443,29 @@ export function Sidebar(p: Props) {
               )
             }
           >
-            <div className="muted small hint">Where notes sit. Changes apply live in a short run; the map always fills the same frame, these settings change how notes are distributed within it.</div>
+            <div className="muted small hint">Where notes sit. Slider changes apply live in a short update run. Links pull notes together; structure links (belongs_to, has, parent_*) say where a note belongs, lateral links (related_to, body, custom keys) are context.</div>
             <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
               <span>
                 Gravity: <strong>{ls.gravity}</strong>
               </span>
               <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
             </label>
-            <label className="row column" title="How much harder belongs_to, has and parent_* links pull than a related_to link. Higher = tighter groups.">
+            <label className="row column" title="How tightly a note sticks to the group it belongs to.">
               <span>
-                Group pull: <strong>{ls.hierarchyWeight}×</strong>
+                Structure links pull: <strong>{ls.structurePull}×</strong>
               </span>
-              <input type="range" min={1} max={10} step={0.5} value={ls.hierarchyWeight} onChange={(e) => onLayoutSettings({ ...ls, hierarchyWeight: Number(e.target.value) })} />
+              <input type="range" min={0.5} max={10} step={0.5} value={ls.structurePull} onChange={(e) => onLayoutSettings({ ...ls, structurePull: Number(e.target.value) })} />
             </label>
-            <label className="row" title="ForceAtlas2 LinLog mode: tighter groups with more space between them.">
-              <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
-              Separate groups more (LinLog)
+            <label className="row column" title="How much cross-links bend the map. Body wikilinks always count for 40% of this.">
+              <span>
+                Lateral links pull: <strong>{ls.lateralPull}×</strong>
+              </span>
+              <input type="range" min={0} max={4} step={0.1} value={ls.lateralPull} onChange={(e) => onLayoutSettings({ ...ls, lateralPull: Number(e.target.value) })} />
             </label>
-            <div className="row">
+            <div className="row buttons">
+              <button className="button" onClick={p.onResetLayout} disabled={p.layoutRunning} title="Lay the whole map out again from scratch (8 s). Use after changing the pulls a lot, or when the map has drifted. The current map is kept as the previous layout.">
+                Reset layout
+              </button>
               <button className="button" onClick={p.onRestoreLayout} disabled={!p.canRestoreLayout} title="Every save keeps the previous positions; this swaps them back (and keeps the current ones as the new previous).">
                 Restore previous layout
               </button>

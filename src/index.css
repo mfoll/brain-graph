@@ -283,3 +283,4 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .add-vault { display: grid; grid-template-columns: 1fr 160px auto; gap: 6px; margin: 10px 0 6px; }
 .add-vault input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--fg); font: inherit; }
 .error-text { color: #ef4444; margin-bottom: 6px; }
+.row.buttons { gap: 6px; flex-wrap: wrap; }

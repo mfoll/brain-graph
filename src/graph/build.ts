@@ -29,9 +29,11 @@ export interface EdgeAttrs {
   [key: string]: unknown;
 }
 
-const EDGE_WEIGHTS: Record<string, number> = { surface_for: 2, source_note: 2, related_to: 1, body: 0.4 };
+/** Structure links say where a note belongs; every other relationship is lateral context. */
 export const isHierarchyKind = (kind: string) => kind === "belongs_to" || kind === "has" || kind.startsWith("parent_");
-export const edgeWeight = (kind: string, hierarchyWeight = 4) => (isHierarchyKind(kind) ? hierarchyWeight : (EDGE_WEIGHTS[kind] ?? 1.5));
+/** Body wikilinks are the noisiest lateral links and count for less than a declared relationship. */
+const LATERAL_FACTOR: Record<string, number> = { body: 0.4 };
+export const edgeWeight = (kind: string, structure = 4, lateral = 1) => (isHierarchyKind(kind) ? structure : lateral * (LATERAL_FACTOR[kind] ?? 1));
 
 /** Layout parameters the user can tune; see the Layout section of the sidebar. */
 export interface LayoutSettings {
@@ -39,15 +41,15 @@ export interface LayoutSettings {
   nodeScale: number;
   /** ForceAtlas2 gravity: pull towards the centre. Lower = groups drift apart. */
   gravity: number;
-  /** Weight of belongs_to / has / parent_* links relative to a related_to link. Higher = tighter groups. */
-  hierarchyWeight: number;
-  /** LinLog mode: tighter groups with more space between them. */
-  separateGroups: boolean;
+  /** Pull of structure links (belongs_to, has, parent_*): how tightly a note sticks to its group. */
+  structurePull: number;
+  /** Pull of lateral links (related_to, body, custom keys): how much cross-links bend the map. */
+  lateralPull: number;
 }
-export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, hierarchyWeight: 4, separateGroups: false };
+export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, structurePull: 4, lateralPull: 1 };
 
-export function applyEdgeWeights(graph: BrainGraph, hierarchyWeight: number): void {
-  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, hierarchyWeight) }), { attributes: ["weight"] });
+export function applyEdgeWeights(graph: BrainGraph, structurePull: number, lateralPull: number): void {
+  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, structurePull, lateralPull) }), { attributes: ["weight"] });
 }
 
 /**
