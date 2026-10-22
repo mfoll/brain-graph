@@ -388,11 +388,15 @@ export default function App() {
     } else if (sp.kind === "facet") {
       for (const n of data.nodes) if ((n.type ?? "(untyped)") === sp.type && String(n.properties[sp.key] ?? "") === sp.value && !hidden.has(n.id)) set.add(n.id);
     } else {
-      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
+      // Unassigned: notes that are not groups themselves and whose chain reaches no group.
+      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !hidden.has(n.id)) set.add(n.id);
     }
     return set;
   }, [filters.spotlight, data, homeIndex, hidden]);
-  const unassignedCount = useMemo(() => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.homes.get(n.id)?.hub).length : 0), [data, homeIndex]);
+  const unassignedCount = useMemo(
+    () => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub).length : 0),
+    [data, homeIndex],
+  );
 
   const matches = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
