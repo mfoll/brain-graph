@@ -244,6 +244,14 @@ export function Sidebar(p: Props) {
                   <button className={`iso${typeSpot(t.name) ? " on" : ""}`} onClick={() => spotType(t.name)} title={typeSpot(t.name) ? "Stop highlighting this type" : "Highlight every note of this type and fade the rest"}>
                     {typeSpot(t.name) ? "unfocus" : "focus"}
                   </button>
+                  {(() => {
+                    const onlyThis = filters.types.size === 1 && filters.types.has(t.name);
+                    return (
+                      <button className={`iso${onlyThis ? " on" : ""}`} onClick={() => toggle("types", t.name, true)} title={onlyThis ? "Show all types again" : "Hide every other type (the view does not move)"}>
+                        {onlyThis ? "all" : "only"}
+                      </button>
+                    );
+                  })()}
                 </div>
                 {open && (
                   <ul className="instances">

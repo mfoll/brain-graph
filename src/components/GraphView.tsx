@@ -392,16 +392,18 @@ export function GraphView(props: GraphViewProps) {
     sigma.__restore();
   }, [props.selected, props.graph, props.hidden, props.spotlight]);
 
-  // Label policy. The label grid is only rebuilt on render, so refresh explicitly; while all labels
-  // are requested, let more of them through than the hover-only default allows.
+  // Label policy. The label grid is only rebuilt on render, so refresh explicitly. While all labels
+  // are requested, or while a type / group is focused (its notes are the only lit ones), let more
+  // labels through than the hover-only default allows.
   useEffect(() => {
     const sigma = sigmaRef.current;
     if (!sigma) return;
+    const dense = props.showLabels || !!props.spotlight;
     sigma.setGraphState({ labelsAlways: props.showLabels });
-    sigma.setSetting("labelDensity", props.showLabels ? 1.4 : 0.5);
-    sigma.setSetting("labelRenderedSizeThreshold", props.showLabels ? 3 : 7);
+    sigma.setSetting("labelDensity", dense ? 1.4 : 0.5);
+    sigma.setSetting("labelRenderedSizeThreshold", dense ? 3 : 7);
     sigma.refresh();
-  }, [props.showLabels, props.graph]);
+  }, [props.showLabels, props.spotlight, props.graph]);
 
   // Hull options changed (level, visibility, toggle): redraw without waiting for a camera move.
   useEffect(() => {
