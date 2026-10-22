@@ -81,25 +81,33 @@ export type Positions = Record<string, [number, number]>;
 /** The map always occupies this extent (graph units), centred on 0: the frame never has to change. */
 export const MAP_EXTENT = 1000;
 
-/**
- * Rescale all positions so the robust bounding box (2nd to 98th percentile, so a few far-flung
- * notes cannot shrink the rest) spans MAP_EXTENT and is centred on 0. Uniform scale, no distortion.
- */
-export function normalizePositions(graph: BrainGraph): void {
+/** Robust bounding box of the positions (2nd to 98th percentile, so a few far-flung notes do not count). */
+export function robustExtent(graph: BrainGraph): { x: [number, number]; y: [number, number]; span: number } | null {
   const xs: number[] = [];
   const ys: number[] = [];
   graph.forEachNode((_n, a) => {
     xs.push(a.x);
     ys.push(a.y);
   });
-  if (xs.length < 2) return;
+  if (xs.length < 2) return null;
   xs.sort((a, b) => a - b);
   ys.sort((a, b) => a - b);
   const q = (arr: number[], p: number) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
-  const x0 = q(xs, 0.02), x1 = q(xs, 0.98), y0 = q(ys, 0.02), y1 = q(ys, 0.98);
-  const span = Math.max(x1 - x0, y1 - y0) || 1;
-  const k = MAP_EXTENT / span;
-  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const x: [number, number] = [q(xs, 0.02), q(xs, 0.98)];
+  const y: [number, number] = [q(ys, 0.02), q(ys, 0.98)];
+  return { x, y, span: Math.max(x[1] - x[0], y[1] - y[0]) || 1 };
+}
+
+/**
+ * Rescale all positions so the robust bounding box spans MAP_EXTENT and is centred on 0. Uniform
+ * scale, no distortion. Done when a graph is built and when a layout run ends, never during a run:
+ * ForceAtlas2 has a natural scale, and forcing another one every frame makes it collapse into a ball.
+ */
+export function normalizePositions(graph: BrainGraph): void {
+  const e = robustExtent(graph);
+  if (!e) return;
+  const k = MAP_EXTENT / e.span;
+  const cx = (e.x[0] + e.x[1]) / 2, cy = (e.y[0] + e.y[1]) / 2;
   if (Math.abs(k - 1) < 1e-6 && Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) return;
   graph.updateEachNodeAttributes((_n, a) => ({ ...a, x: (a.x - cx) * k, y: (a.y - cy) * k }), { attributes: ["x", "y"] });
 }

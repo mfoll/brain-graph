@@ -3,7 +3,7 @@ import Sigma from "sigma";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import { drawOnCanvas } from "@sigma/export-image";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { MAP_EXTENT, collectPositions, normalizePositions, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
+import { MAP_EXTENT, collectPositions, normalizePositions, robustExtent, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { clearHulls, drawHulls, type HullOptions } from "../graph/hulls";
 
@@ -20,6 +20,8 @@ export interface GraphViewProps {
   layoutStart: number;
   /** Cap on a node's displacement per frame at the start of the run (graph units). */
   layoutMaxStep: number;
+  /** ForceAtlas2 iterations per animation frame. */
+  layoutIterations: number;
   /** User-tunable physics. */
   layoutSettings: LayoutSettings;
   theme: { background: string; label: string; labelHalo: string };
@@ -61,15 +63,18 @@ const COOL_FACTOR = 400; // slowDown multiplier reached at the end of the run
 // iteration rate also drops from two per frame to one.
 // Besides the exponential damping, each node's displacement per frame is capped (`maxStep`, in graph
 // units, shrinking with progress), which removes the jumpy first frames when forces are large.
-function scheduleAt(progress: number, start: number, maxStep: number): { slowDown: number; iterations: number; maxStep: number } {
-  return { slowDown: start * COOL_FACTOR ** progress ** 1.2, iterations: 1, maxStep: maxStep * (1 - progress) ** 1.5 + 0.02 };
+function scheduleAt(progress: number, start: number, maxStep: number, iterations: number): { slowDown: number; iterations: number; maxStep: number } {
+  // Iterations taper to one per frame in the last stretch so the end is quiet.
+  return { slowDown: start * COOL_FACTOR ** progress ** 1.2, iterations: progress < 0.7 ? iterations : 1, maxStep: maxStep * (1 - progress) ** 1.5 + 0.02 };
 }
 
 interface LayoutRunner {
   settings: ReturnType<typeof forceAtlas2.inferSettings>;
   iterations: number;
-  /** Maximum displacement of a node per frame, in graph units (Infinity = uncapped). */
+  /** Maximum displacement of a node per frame, as a fraction of the current map span (Infinity = uncapped). */
   maxStep: number;
+  /** Called after each frame with the current robust extent, so the frame can follow the map's natural scale. */
+  onFrame: ((extent: ReturnType<typeof robustExtent>) => void) | null;
   start(): void;
   stop(): void;
   isRunning(): boolean;
@@ -83,6 +88,7 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
   const runner: LayoutRunner = {
     iterations: 1,
     maxStep: Infinity,
+    onFrame: null,
     settings: {
       ...forceAtlas2.inferSettings(graph),
       gravity: 1,
@@ -105,10 +111,10 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
           graph.forEachNode((n, a) => before.set(n, [a.x, a.y]));
         }
         forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
-        // Keep the map at its fixed extent (so physics never changes the scale of the picture), then
-        // cap each node's displacement for this frame.
-        normalizePositions(graph);
-        if (Number.isFinite(cap)) {
+        // Let the physics keep its natural scale; cap each node's displacement relative to that scale.
+        const extent = robustExtent(graph);
+        if (Number.isFinite(cap) && extent) {
+          const capUnits = cap * extent.span;
           graph.updateEachNodeAttributes(
             (n, a) => {
               const b = before.get(n);
@@ -116,13 +122,14 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
               const dx = a.x - b[0];
               const dy = a.y - b[1];
               const d = Math.hypot(dx, dy);
-              if (d <= cap) return a;
-              const k = cap / d;
+              if (d <= capUnits) return a;
+              const k = capUnits / d;
               return { ...a, x: b[0] + dx * k, y: b[1] + dy * k };
             },
             { attributes: ["x", "y"] },
           );
         }
+        runner.onFrame?.(extent);
         frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
@@ -330,9 +337,18 @@ export function GraphView(props: GraphViewProps) {
     // The map is normalised to MAP_EXTENT around 0 on every layout frame, so the frame is fixed once:
     // nothing ever refits, node sizes stay constant, and "Fit" is just a smooth camera move.
     const half = MAP_EXTENT / 2 + MAP_EXTENT * 0.06;
-    sigma.setCustomBBox({ x: [-half, half], y: [-half, half] });
-    const fitToVisible = () => {
-      /* kept for the Helpers contract; the frame is fixed */
+    const fixedFrame = () => sigma.setCustomBBox({ x: [-half, half], y: [-half, half] });
+    fixedFrame();
+    const fitToVisible = fixedFrame;
+    // While a layout runs, the frame follows the map's natural scale (smoothly, every frame), so the
+    // whole map stays in view without the physics being forced to a size.
+    layout.onFrame = (extent) => {
+      if (!extent) return;
+      const pad = extent.span * 0.06;
+      const cx = (extent.x[0] + extent.x[1]) / 2;
+      const cy = (extent.y[0] + extent.y[1]) / 2;
+      const h = extent.span / 2 + pad;
+      sigma.setCustomBBox({ x: [cx - h, cx + h], y: [cy - h, cy + h] });
     };
 
     // Expose the helpers to the effects below through the instance.
@@ -398,10 +414,10 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart, layoutMaxStep, layoutSettings: ls } = props;
+    const { graph, layoutPins, layoutDuration, layoutStart, layoutMaxStep, layoutIterations, layoutSettings: ls } = props;
     const reset = () =>
       Object.assign(layout, {
-        iterations: 1,
+        iterations: layoutIterations,
         maxStep: layoutMaxStep,
         settings: {
           ...layout.settings,
@@ -414,6 +430,8 @@ export function GraphView(props: GraphViewProps) {
       layout.stop();
       reset();
       if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
+      normalizePositions(graph);
+      fit();
       propsRef.current.onLayoutProgress?.(0);
       propsRef.current.onLayoutStopped(collectPositions(graph), String(graph.getAttribute("vault") ?? ""));
     };
@@ -427,7 +445,7 @@ export function GraphView(props: GraphViewProps) {
       const started = performance.now();
       const tick = setInterval(() => {
         const progress = Math.min(1, (performance.now() - started) / layoutDuration);
-        const sched = scheduleAt(progress, layoutStart, layoutMaxStep);
+        const sched = scheduleAt(progress, layoutStart, layoutMaxStep, layoutIterations);
         layout.settings.slowDown = sched.slowDown;
         layout.iterations = sched.iterations;
         layout.maxStep = sched.maxStep;

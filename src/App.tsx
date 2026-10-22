@@ -29,12 +29,14 @@ function useTheme() {
 
 // Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
 // Short, damped from the first frame: almost all the useful movement happens early anyway.
+// `iterations` is ForceAtlas2 steps per animation frame: a first layout starts from a circle and needs
+// well over a thousand steps to form clusters, a nudge of an existing map needs a few dozen.
+// `maxStep` is a fraction of the map's span per frame.
 const LAYOUT_RUNS = {
-  // A first layout starts from a circle and has to form the clusters: it needs room to move.
-  scratch: { duration: 5000, start: 8, maxStep: 10 },
-  recompute: { duration: 750, start: 24, maxStep: 1 },
-  tune: { duration: 750, start: 24, maxStep: 1 }, // live preview after a physics change, from the current positions
-  settle: { duration: 750, start: 24, maxStep: 2 },
+  scratch: { duration: 8000, start: 6, maxStep: 0.01, iterations: 5 },
+  recompute: { duration: 750, start: 24, maxStep: 0.001, iterations: 2 },
+  tune: { duration: 750, start: 24, maxStep: 0.001, iterations: 2 }, // live preview after a physics change
+  settle: { duration: 750, start: 24, maxStep: 0.002, iterations: 2 },
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
@@ -203,10 +205,29 @@ export default function App() {
   const [initialised, setInitialised] = useState<string | null>(null);
   useEffect(() => {
     if (!data || initialised === data.vault.slug) return;
+    // View filters are remembered per vault; types or kinds that no longer exist are dropped, new ones shown.
+    let remembered: Partial<Omit<Filters, "types" | "kinds">> & { hiddenTypes?: string[]; hiddenKinds?: string[] } = {};
+    try {
+      remembered = JSON.parse(localStorage.getItem(`brain-graph.view.${data.vault.slug}`) ?? "{}");
+    } catch {
+      /* ignore */
+    }
+    const hiddenTypes = new Set(remembered.hiddenTypes ?? ["Type"]);
+    const hiddenKinds = new Set(remembered.hiddenKinds ?? ["body"]);
     setFilters((f) => ({
       ...f,
-      types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
-      kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
+      hideArchived: remembered.hideArchived ?? true,
+      hideOrphans: remembered.hideOrphans ?? false,
+      focusDepth: 0,
+      collapseSources: remembered.collapseSources ?? false,
+      recency: remembered.recency ?? false,
+      hulls: remembered.hulls ?? true,
+      names: remembered.names ?? true,
+      labels: remembered.labels ?? false,
+      minDegree: remembered.minDegree ?? 0,
+      regionSize: remembered.regionSize ?? 1,
+      types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
+      kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => !hiddenKinds.has(k))),
       spotlight: initialised === null ? paramToSpotlight(initialUrl.get("focus")) : null,
     }));
     const urlNote = initialised === null ? initialUrl.get("note") : null;
@@ -470,6 +491,26 @@ export default function App() {
     if (already) setSelected(null);
     else select(id, true);
   };
+  // Remember the view filters per vault (not the spotlight: that is URL state).
+  useEffect(() => {
+    if (!data || initialised !== data.vault.slug) return;
+    const { types, kinds, spotlight: _sp, focusDepth: _fd, ...rest } = filters;
+    void _sp;
+    void _fd;
+    try {
+      localStorage.setItem(
+        `brain-graph.view.${data.vault.slug}`,
+        JSON.stringify({
+          ...rest,
+          hiddenTypes: data.types.map((t) => t.name).filter((t) => !types.has(t)),
+          hiddenKinds: data.edgeKinds.map((k) => k.kind).filter((k) => !kinds.has(k)),
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [filters, data, initialised]);
+
   // Escape: unfocus first, then close the panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -612,7 +653,7 @@ export default function App() {
             title={
               layoutRun
                 ? "Stop now and keep the current positions"
-                : "Nudge the layout from the current positions (under a second, cools down and saves by itself). Alt-click to lay the whole map out again from scratch (5 s), for example after a poor first layout."
+                : "Nudge the layout from the current positions (under a second, cools down and saves by itself). Alt-click to lay the whole map out again from scratch (8 s), for example after a poor first layout."
             }
           >
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
@@ -702,6 +743,7 @@ export default function App() {
           layoutDuration={run.duration}
           layoutStart={run.start}
           layoutMaxStep={run.maxStep}
+          layoutIterations={run.iterations}
           layoutSettings={layoutSettings}
           theme={theme.graph}
           hulls={filters.hulls || filters.names ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize, regions: filters.hulls, names: filters.names } : null}
