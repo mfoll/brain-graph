@@ -113,7 +113,8 @@ async function discoverVaults(opts: VaultPluginOptions): Promise<VaultInfo[]> {
     const p = expand(opts.vaultPath);
     const existing = out.get(p);
     const label = opts.label ?? existing?.label ?? path.basename(p);
-    out.set(p, { slug: opts.slug ?? existing?.slug ?? slugify(label), label, path: p, isDefault: true, source: "env" });
+    // The VAULT env var only chooses the default; a vault also known from Tolaria or added by hand keeps that origin.
+    out.set(p, { slug: opts.slug ?? existing?.slug ?? slugify(label), label, path: p, isDefault: true, source: existing?.source ?? "env" });
     for (const v of out.values()) if (v.path !== p) v.isDefault = false;
   }
   const list = [...out.values()];
@@ -274,25 +275,58 @@ export function vaultPlugin(opts: VaultPluginOptions = {}): Plugin {
         }
       });
 
-      // Saved layout positions per vault: GET returns {savedAt, positions} or 404; PUT stores; DELETE removes.
+      // Swap the saved layout with its previous version (the current one becomes the previous).
+      server.middlewares.use("/api/layout/restore", async (req, res) => {
+        try {
+          const v = await resolveVault(req);
+          if (!v) return json(res, { error: "unknown vault" }, 404);
+          const file = path.join(layoutDir, `${v.info.slug}.json`);
+          const prev = path.join(layoutDir, `${v.info.slug}.prev.json`);
+          const [cur, old] = await Promise.all([fs.readFile(file, "utf8").catch(() => null), fs.readFile(prev, "utf8").catch(() => null)]);
+          if (old === null) return json(res, { error: "no previous layout" }, 404);
+          await fs.writeFile(file, old);
+          if (cur !== null) await fs.writeFile(prev, cur);
+          res.setHeader("Content-Type", "application/json");
+          res.end(old);
+        } catch (err) {
+          json(res, { error: String(err) }, 500);
+        }
+      });
+
+      // Saved layout positions per vault: GET returns {savedAt, positions, hasPrevious} or 404; PUT stores
+      // (keeping the previous version as <slug>.prev.json); DELETE removes.
       server.middlewares.use("/api/layout", async (req, res) => {
         try {
           const v = await resolveVault(req);
           if (!v) return json(res, { error: "unknown vault" }, 404);
           const file = path.join(layoutDir, `${v.info.slug}.json`);
+          const prev = path.join(layoutDir, `${v.info.slug}.prev.json`);
+          const hasPrevious = () => fs.stat(prev).then(() => true).catch(() => false);
           if (req.method === "GET") {
             const text = await fs.readFile(file, "utf8").catch(() => null);
             if (text === null) return json(res, {}, 404);
-            res.setHeader("Content-Type", "application/json");
-            return res.end(text);
+            return json(res, { ...(JSON.parse(text) as SavedLayout), hasPrevious: await hasPrevious() });
           }
           if (req.method === "PUT") {
             const body = JSON.parse(await readBody(req)) as Partial<SavedLayout>;
             if (!body || typeof body.positions !== "object") throw new Error("positions missing");
             const saved: SavedLayout = { savedAt: new Date().toISOString(), positions: body.positions as SavedLayout["positions"] };
             await fs.mkdir(layoutDir, { recursive: true });
+            // Keep the previous version, but only when the layout really changed (not for a repeated save of the same map).
+            const current = await fs.readFile(file, "utf8").catch(() => null);
+            if (current !== null) {
+              const curPos = (JSON.parse(current) as SavedLayout).positions ?? {};
+              const ids = Object.keys(curPos);
+              let moved = 0;
+              for (const id of ids) {
+                const a = curPos[id];
+                const b = saved.positions[id];
+                if (!b || Math.hypot(a[0] - b[0], a[1] - b[1]) > 1) moved++;
+              }
+              if (moved > ids.length * 0.01) await fs.writeFile(prev, current);
+            }
             await fs.writeFile(file, JSON.stringify(saved));
-            return json(res, { savedAt: saved.savedAt, count: Object.keys(saved.positions).length });
+            return json(res, { savedAt: saved.savedAt, count: Object.keys(saved.positions).length, hasPrevious: await hasPrevious() });
           }
           if (req.method === "DELETE") {
             await fs.rm(file, { force: true });

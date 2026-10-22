@@ -130,6 +130,7 @@ export function collectPositions(graph: BrainGraph): Positions {
 export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGraph {
   const colors = typeColorMap(data);
   const graph: BrainGraph = new Graph({ multi: true, type: "directed", allowSelfLoops: false });
+  graph.setAttribute("vault", data.vault.slug);
   for (const n of data.nodes) {
     const degree = n.inDegree + n.outDegree;
     const type = n.type ?? "(untyped)";

@@ -11,7 +11,7 @@ interface Props {
   onClose: () => void;
 }
 
-const SOURCE_LABEL = { manual: "added here", tolaria: "from Tolaria", env: "from VAULT" } as const;
+const SOURCE_LABEL = { manual: "added here", tolaria: "from Tolaria", env: "from the VAULT variable the server was started with" } as const;
 
 export function VaultManager({ registry, current, onSelect, onAdd, onRemove, onUseTolaria, onClose }: Props) {
   const [path, setPath] = useState("");

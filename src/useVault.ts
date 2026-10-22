@@ -5,6 +5,8 @@ import type { Positions } from "./graph/build";
 export interface SavedLayout {
   savedAt: string;
   positions: Positions;
+  /** The server keeps the previous version of the file; it can be restored. */
+  hasPrevious?: boolean;
 }
 
 const q = (slug: string | null) => (slug ? `vault=${encodeURIComponent(slug)}` : "");
@@ -66,16 +68,18 @@ export function useVault(slug: string | null) {
 
 /** Saved node positions for one vault, stored by the dev server in a per-vault sidecar file. */
 export function useSavedLayout(slug: string | null) {
-  const [layout, setLayout] = useState<SavedLayout | null | undefined>(undefined); // undefined = loading
+  // The layout is stored together with the slug it belongs to, so a vault switch never exposes the
+  // previous vault's positions for even one render (that race used to seed the new graph wrongly).
+  const [state, setState] = useState<{ slug: string | null; layout: SavedLayout | null | undefined }>({ slug: null, layout: undefined });
+  const layout = state.slug === slug ? state.layout : undefined; // undefined = loading
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    setLayout(undefined);
     fetch(`/api/layout?${q(slug)}`)
       .then((r) => (r.ok ? (r.json() as Promise<SavedLayout>) : null))
-      .then((l) => !cancelled && setLayout(l))
-      .catch(() => !cancelled && setLayout(null));
+      .then((l) => !cancelled && setState({ slug, layout: l }))
+      .catch(() => !cancelled && setState({ slug, layout: null }));
     return () => {
       cancelled = true;
     };
@@ -84,13 +88,13 @@ export function useSavedLayout(slug: string | null) {
   const save = async (positions: Positions) => {
     const r = await fetch(`/api/layout?${q(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ positions }) });
     if (r.ok) {
-      const { savedAt } = (await r.json()) as { savedAt: string };
-      setLayout({ savedAt, positions });
+      const { savedAt, hasPrevious } = (await r.json()) as { savedAt: string; hasPrevious?: boolean };
+      setState({ slug, layout: { savedAt, positions, hasPrevious } });
     }
   };
   const reset = async () => {
     await fetch(`/api/layout?${q(slug)}`, { method: "DELETE" });
-    setLayout(null);
+    setState({ slug, layout: null });
   };
 
   return { layout, save, reset };

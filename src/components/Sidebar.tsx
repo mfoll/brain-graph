@@ -51,6 +51,8 @@ interface Props {
   layoutSettings: LayoutSettings;
   onLayoutSettings: (s: LayoutSettings) => void;
   layoutRunning: boolean;
+  canRestoreLayout: boolean;
+  onRestoreLayout: () => void;
 }
 
 
@@ -456,6 +458,11 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
               Separate groups more (LinLog)
             </label>
+            <div className="row">
+              <button className="button" onClick={p.onRestoreLayout} disabled={!p.canRestoreLayout} title="Every save keeps the previous positions; this swaps them back (and keeps the current ones as the new previous).">
+                Restore previous layout
+              </button>
+            </div>
           </Section>
 
           <Section id="appearance" title="Appearance" open={!collapsed.has("appearance")} onToggle={toggleSection}>

@@ -30,7 +30,8 @@ function useTheme() {
 // Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
 // Short, damped from the first frame: almost all the useful movement happens early anyway.
 const LAYOUT_RUNS = {
-  scratch: { duration: 2500, start: 12, maxStep: 4 },
+  // A first layout starts from a circle and has to form the clusters: it needs room to move.
+  scratch: { duration: 5000, start: 8, maxStep: 10 },
   recompute: { duration: 750, start: 24, maxStep: 1 },
   tune: { duration: 750, start: 24, maxStep: 1 }, // live preview after a physics change, from the current positions
   settle: { duration: 750, start: 24, maxStep: 2 },
@@ -279,12 +280,21 @@ export default function App() {
   }, [built]);
   // Which link kinds the last layout run used: toggling kinds changes the forces but does not re-run.
   const layoutKinds = useRef<Set<string> | null>(null);
-  const onLayoutStopped = (positions: Positions) => {
+  const onLayoutStopped = (positions: Positions, vault: string) => {
+    // A run can end while the vault is being switched: never let another vault's positions leak into this one.
+    if (vault !== vaultSlug) return setLayoutRun(null);
     layoutKinds.current = new Set(filters.kinds);
     latestPositions.current = positions;
     if (graph) for (const [id, [x, y]] of Object.entries(positions)) if (graph.hasNode(id)) graph.mergeNodeAttributes(id, { x, y });
     setLayoutRun(null);
     void saved.save(positions);
+  };
+  const restorePreviousLayout = async () => {
+    const r = await fetch(`/api/layout/restore?vault=${encodeURIComponent(vaultSlug ?? "")}`, { method: "POST" });
+    if (!r.ok) return;
+    const l = (await r.json()) as { positions: Positions };
+    latestPositions.current = null;
+    setSeed((s) => ({ positions: l.positions, nonce: (s?.nonce ?? 0) + 1, vault: vaultSlug }));
   };
   const recompute = async (fromScratch: boolean) => {
     if (layoutRun) return setLayoutRun(null);
@@ -602,7 +612,7 @@ export default function App() {
             title={
               layoutRun
                 ? "Stop now and keep the current positions"
-                : "Nudge the layout from the current positions (under a second, cools down and saves by itself). Alt-click to start again from scratch."
+                : "Nudge the layout from the current positions (under a second, cools down and saves by itself). Alt-click to lay the whole map out again from scratch (5 s), for example after a poor first layout."
             }
           >
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Recompute layout"}
@@ -675,6 +685,8 @@ export default function App() {
         layoutSettings={layoutSettings}
         onLayoutSettings={setLayoutSettings}
         layoutRunning={layoutRun !== null}
+        canRestoreLayout={!!saved.layout?.hasPrevious}
+        onRestoreLayout={() => void restorePreviousLayout()}
       />
 
       <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />

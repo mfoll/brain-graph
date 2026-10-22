@@ -33,7 +33,8 @@ export interface GraphViewProps {
   emphasisHub?: string | null;
   onHover: (node: string | null, pos: { x: number; y: number } | null) => void;
   onSelect: (node: string | null) => void;
-  onLayoutStopped: (positions: Positions) => void;
+  /** Positions at the end of a run, with the slug of the vault the graph belongs to (a run may end while another vault is loading). */
+  onLayoutStopped: (positions: Positions, vault: string) => void;
   /** Progress of the current layout run, 0..1. */
   onLayoutProgress?: (progress: number) => void;
   focusRequest: { node: string; nonce: number } | null;
@@ -414,7 +415,7 @@ export function GraphView(props: GraphViewProps) {
       reset();
       if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
       propsRef.current.onLayoutProgress?.(0);
-      propsRef.current.onLayoutStopped(collectPositions(graph));
+      propsRef.current.onLayoutStopped(collectPositions(graph), String(graph.getAttribute("vault") ?? ""));
     };
     if (props.layoutRunning) {
       if (!layout.isRunning()) {
