@@ -43,10 +43,8 @@ export interface LayoutSettings {
   hierarchyWeight: number;
   /** LinLog mode: tighter groups with more space between them. */
   separateGroups: boolean;
-  /** adjustSizes: notes do not overlap, groups become less dense. */
-  preventOverlap: boolean;
 }
-export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, hierarchyWeight: 4, separateGroups: false, preventOverlap: false };
+export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, hierarchyWeight: 4, separateGroups: false };
 
 export function applyEdgeWeights(graph: BrainGraph, hierarchyWeight: number): void {
   graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, hierarchyWeight) }), { attributes: ["weight"] });

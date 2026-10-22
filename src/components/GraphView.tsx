@@ -361,7 +361,6 @@ export function GraphView(props: GraphViewProps) {
           slowDown: layoutStart,
           gravity: ls.gravity,
           linLogMode: ls.separateGroups,
-          adjustSizes: ls.preventOverlap,
         },
       });
     const stop = () => {
@@ -433,7 +432,7 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout || !layout.isRunning()) return;
     const ls = props.layoutSettings;
-    Object.assign(layout.settings, { gravity: ls.gravity, linLogMode: ls.separateGroups, adjustSizes: ls.preventOverlap });
+    Object.assign(layout.settings, { gravity: ls.gravity, linLogMode: ls.separateGroups });
   }, [props.layoutSettings]);
 
   // Label policy. The label grid is only rebuilt on render, so refresh explicitly. While all labels

@@ -22,6 +22,8 @@ export interface Filters {
   spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "unassigned" } | null;
   /** Hide notes with fewer visible links than this (group notes are always kept). 0 = off. */
   minDegree: number;
+  /** Group region size multiplier. */
+  regionSize: number;
 }
 
 interface Props {
@@ -195,6 +197,14 @@ export function Sidebar(p: Props) {
           Group regions and names
           <span className="muted small"> · follow the grouping and level above</span>
         </label>
+        {filters.hulls && (
+          <label className="row column" title="How far a region extends around its notes and along the links inside the group.">
+            <span>
+              Region size: <strong>{filters.regionSize}×</strong>
+            </span>
+            <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
+          </label>
+        )}
         {(() => {
           const isDefault = homeSettings.useHas && homeSettings.hubTypes.size === homeDefaults.length && homeDefaults.every((t) => homeSettings.hubTypes.has(t));
           return (
@@ -393,10 +403,6 @@ export function Sidebar(p: Props) {
         <label className="row" title="ForceAtlas2 LinLog mode: tighter groups with more space between them.">
           <input type="checkbox" checked={ls.separateGroups} onChange={(e) => onLayoutSettings({ ...ls, separateGroups: e.target.checked })} />
           Separate groups more (LinLog)
-        </label>
-        <label className="row" title="Notes stop overlapping; dense groups loosen up.">
-          <input type="checkbox" checked={ls.preventOverlap} onChange={(e) => onLayoutSettings({ ...ls, preventOverlap: e.target.checked })} />
-          Prevent overlap
         </label>
       </section>
 

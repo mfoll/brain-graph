@@ -193,6 +193,7 @@ export default function App() {
     labels: false,
     spotlight: null,
     minDegree: 0,
+    regionSize: 1,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -233,7 +234,10 @@ export default function App() {
     let next = DEFAULT_LAYOUT;
     try {
       const raw = localStorage.getItem(`brain-graph.layout.${data.vault.slug}`);
-      if (raw) next = { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<LayoutSettings>) };
+      if (raw) {
+        const v = JSON.parse(raw) as Partial<LayoutSettings> & Record<string, unknown>;
+        next = { ...DEFAULT_LAYOUT, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULT_LAYOUT)) } as LayoutSettings;
+      }
     } catch {
       /* ignore */
     }
@@ -657,7 +661,7 @@ export default function App() {
           layoutMaxStep={run.maxStep}
           layoutSettings={layoutSettings}
           theme={theme.graph}
-          hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data } : null}
+          hulls={filters.hulls ? { index: homeIndex, level: homeLevel, hidden, data, regionSize: filters.regionSize } : null}
           showLabels={filters.labels}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}

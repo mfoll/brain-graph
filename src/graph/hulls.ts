@@ -1,6 +1,6 @@
 import type Sigma from "sigma";
 import type { VaultGraph } from "../types";
-import type { BrainGraph } from "./build";
+import { isHierarchyKind, type BrainGraph } from "./build";
 import { anchorAt, homeChain, type HomeIndex, type HomeLevel } from "./home";
 
 export interface HullOptions {
@@ -14,6 +14,8 @@ export interface HullOptions {
   quiet?: boolean; // note labels are shown: draw group names smaller and lighter
   /** Hub whose name must always be drawn (the focused group), even with few notes or when crowded. */
   emphasis?: string | null;
+  /** Region size multiplier (1 = default). */
+  regionSize?: number;
 }
 
 type Pt = { x: number; y: number };
@@ -59,7 +61,14 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
 
   // Group visible nodes by their anchor hub at this level.
   const groups = new Map<string, (Pt & { r: number })[]>();
+  const anchorOf = new Map<string, string>();
   const sizeRatio = sigma.scaleSize(1);
+  // Padding is defined in graph units so regions scale with the map instead of with node pixels.
+  const o = sigma.graphToViewport({ x: 0, y: 0 });
+  const u = sigma.graphToViewport({ x: 1, y: 0 });
+  const pxPerUnit = Math.hypot(u.x - o.x, u.y - o.y);
+  const padUnits = 18 * (opts.regionSize ?? 1);
+  const pad = Math.max(6, padUnits * pxPerUnit);
   graph.forEachNode((id, a) => {
     if (opts.hidden.has(id)) return;
     const note = opts.index.byId.get(id);
@@ -67,12 +76,23 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     const chain = homeChain(note, opts.index);
     if (!chain.length) return;
     const anchor = anchorAt(opts.index, chain[0], opts.level);
+    anchorOf.set(id, anchor);
     const p = sigma.graphToViewport({ x: a.x, y: a.y });
     (groups.get(anchor) ?? groups.set(anchor, []).get(anchor)!).push({ ...p, r: a.size * sizeRatio });
   });
+  // Hierarchy links inside a group become thick rounded strokes, so a cluster reads as one shape
+  // instead of a string of beads when its notes are small or a little apart.
+  const strokes = new Map<string, [Pt, Pt][]>();
+  graph.forEachEdge((_e, a, src, tgt) => {
+    if (!isHierarchyKind(a.kind)) return;
+    const g1 = anchorOf.get(src);
+    if (!g1 || g1 !== anchorOf.get(tgt)) return;
+    const p1 = sigma.graphToViewport(graph.getNodeAttributes(src));
+    const p2 = sigma.graphToViewport(graph.getNodeAttributes(tgt));
+    (strokes.get(g1) ?? strokes.set(g1, []).get(g1)!).push([p1, p2]);
+  });
 
   const palette = opts.index.palettes[opts.level];
-  const pad = 16;
   const off = (drawHulls as unknown as { _off?: HTMLCanvasElement })._off ?? document.createElement("canvas");
   (drawHulls as unknown as { _off?: HTMLCanvasElement })._off = off;
   off.width = back.width;
@@ -88,6 +108,16 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     if (pts.length < 2) continue;
     const color = palette.get(anchor) ?? "#888";
     octx.fillStyle = color;
+    octx.strokeStyle = color;
+    octx.lineCap = "round";
+    octx.lineJoin = "round";
+    octx.lineWidth = pad * 1.6;
+    octx.beginPath();
+    for (const [p1, p2] of strokes.get(anchor) ?? []) {
+      octx.moveTo(p1.x, p1.y);
+      octx.lineTo(p2.x, p2.y);
+    }
+    octx.stroke();
     octx.beginPath();
     for (const p of pts) {
       octx.moveTo(p.x + p.r + pad, p.y);
