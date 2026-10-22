@@ -159,7 +159,6 @@ export default function App() {
     hideArchived: true,
     hideOrphans: false,
     focusDepth: 0,
-    subtree: null,
     collapseSources: false,
     recency: false,
     hulls: true,
@@ -174,7 +173,6 @@ export default function App() {
       ...f,
       types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")),
       kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => k !== "body")),
-      subtree: null,
       spotlight: null,
     }));
     setSelected(null);
@@ -262,13 +260,11 @@ export default function App() {
   const hidden = useMemo(() => {
     const set = new Set<string>();
     if (!filteredGraph || !data || !homeIndex) return set;
-    const members = filters.subtree ? subtreeMembers(filters.subtree, data, homeIndex) : null;
     for (const n of data.nodes) {
       const t = n.type ?? "(untyped)";
       if (!filters.types.has(t)) set.add(n.id);
       else if (filters.collapseSources && t === "Source") set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
-      else if (members && !members.has(n.id)) set.add(n.id);
     }
     if (filters.hideOrphans) {
       filteredGraph.forEachNode((n) => {
@@ -315,6 +311,18 @@ export default function App() {
   const select = (id: string | null, center = false) => {
     setSelected(id);
     if (id && center) setFocusRequest({ node: id, nonce: Date.now() });
+  };
+  // Home row click: focus the group and open its note; clicking the focused group again clears both.
+  const focusHub = (id: string) => {
+    const already = filters.spotlight?.kind === "hub" && filters.spotlight.id === id;
+    setFilters((f) => ({ ...f, spotlight: already ? null : { kind: "hub", id } }));
+    if (already) setSelected(null);
+    else select(id, true);
+  };
+  // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
+  const clickGraph = (id: string | null) => {
+    setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
+    select(id);
   };
 
   if (error || vaultsError) return <div className="status error">Could not load the vault graph: {error ?? vaultsError}</div>;
@@ -421,6 +429,7 @@ export default function App() {
         onChange={setFilters}
         selected={selected}
         onSelect={(id) => select(id, true)}
+        onFocusHub={focusHub}
       />
 
       <div className={`gutter${sidebar.dragging ? " active" : ""}`} onMouseDown={sidebar.startDrag} title="Drag to resize the sidebar" />
@@ -443,7 +452,7 @@ export default function App() {
             if (node !== undefined) setHovered(node);
             if (pos) setPointer(pos);
           }}
-          onSelect={(id) => select(id)}
+          onSelect={clickGraph}
           onLayoutStopped={onLayoutStopped}
           onLayoutProgress={setLayoutProgress}
           focusRequest={focusRequest}

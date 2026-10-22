@@ -108,7 +108,8 @@ button { font: inherit; color: inherit; }
   padding: 4px 6px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left;
 }
 .legend li > button:hover { background: var(--panel-2); }
-.legend li.off { opacity: .4; }
+.legend li.off > .tree-line .tree-label { opacity: .4; }
+.legend li.off > .tree-line .iso.on { opacity: 1; color: var(--muted); }
 .legend .name { flex: 1; }
 .count { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
 .swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; }
@@ -178,7 +179,6 @@ details pre { font-size: 11px; background: var(--panel-2); padding: 8px; border-
 .tree-line { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
 .tree-line:hover { background: var(--panel-2); }
 .tree-row.selected > .tree-line .name, .instances li.selected .name { color: var(--accent); font-weight: 600; }
-.tree-row.isolated > .tree-line { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .disclosure { width: 18px; flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 11px; }
 .disclosure.empty { cursor: default; }
 .tree-label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 4px 6px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }

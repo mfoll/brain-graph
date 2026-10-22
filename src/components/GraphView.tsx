@@ -251,8 +251,8 @@ export function GraphView(props: GraphViewProps) {
     };
     const restore = () => {
       const { selected, spotlight } = propsRef.current;
-      if (selected && graph.hasNode(selected)) highlight(selected);
-      else if (spotlight) spotlightAll(spotlight);
+      if (spotlight) spotlightAll(spotlight);
+      else if (selected && graph.hasNode(selected)) highlight(selected);
       else clearHighlight();
     };
     sigma.on("enterNode", ({ node, event }) => {

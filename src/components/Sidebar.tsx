@@ -13,8 +13,6 @@ export interface Filters {
   hideArchived: boolean;
   hideOrphans: boolean;
   focusDepth: number; // 0 = whole graph
-  /** Isolate the notes under this hub (project / responsibility / topic). */
-  subtree: string | null;
   /** Hide Source notes and show their count on the parent note's label. */
   collapseSources: boolean;
   /** Fade notes by time since last edit. */
@@ -44,12 +42,14 @@ interface Props {
   onChange: (f: Filters) => void;
   selected: string | null;
   onSelect: (id: string) => void;
+  /** Click on a Home row: focus the group (and select its note), or unfocus when already focused. */
+  onFocusHub: (id: string) => void;
 }
 
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, typeColors, homeIndex, homeSettings, homeDefaults, colorMode, homeLevel, edgeKinds, filters, onChange, selected, onSelect } = p;
+  const { data, types, typeColors, homeIndex, homeSettings, homeDefaults, colorMode, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub } = p;
   const [showGrouping, setShowGrouping] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
 
@@ -84,7 +84,7 @@ export function Sidebar(p: Props) {
     else next.add(value);
     return next;
   };
-  const toggle = <K extends "types" | "kinds">(key: K, value: string, only: boolean) => {
+  const toggle = <K extends "types" | "kinds">(key: K, value: string, only = false) => {
     const next = new Set(filters[key]);
     if (only) {
       const all = key === "types" ? types.map((t) => t.name) : edgeKinds.map((k) => k.kind);
@@ -100,8 +100,6 @@ export function Sidebar(p: Props) {
     const all = key === "types" ? types.map((t) => t.name) : edgeKinds.map((k) => k.kind);
     onChange({ ...filters, [key]: new Set(on ? all : []) });
   };
-  const isolate = (id: string) => onChange({ ...filters, subtree: filters.subtree === id ? null : id });
-  const spotHub = (id: string) => onChange({ ...filters, spotlight: filters.spotlight?.kind === "hub" && filters.spotlight.id === id ? null : { kind: "hub", id } });
   const spotType = (value: string) => onChange({ ...filters, spotlight: filters.spotlight?.kind === "type" && filters.spotlight.value === value ? null : { kind: "type", value } });
   const hubSpot = (id: string) => filters.spotlight?.kind === "hub" && filters.spotlight.id === id;
   const typeSpot = (value: string) => filters.spotlight?.kind === "type" && filters.spotlight.value === value;
@@ -113,14 +111,13 @@ export function Sidebar(p: Props) {
     const hub: Hub | undefined = homeIndex.hubs.get(id);
     if (!hub) return null;
     const open = openHubs.has(id);
-    const isolated = filters.subtree === id;
     return (
-      <li key={id} className={`tree-row${isolated ? " isolated" : ""}${selected === id ? " selected" : ""}${hubSpot(id) ? " spotlit" : ""}`} data-hub={id}>
+      <li key={id} className={`tree-row${selected === id ? " selected" : ""}${hubSpot(id) ? " spotlit" : ""}`} data-hub={id}>
         <div className="tree-line" style={{ paddingLeft: hub.depth * 12 }}>
           <button className={`disclosure${hub.children.length ? "" : " empty"}`} onClick={() => setOpenHubs(toggleIn(openHubs, id))} aria-label={open ? "Collapse" : "Expand"}>
             {hub.children.length ? (open ? "▾" : "▸") : ""}
           </button>
-          <button className="tree-label" onClick={(e) => (e.altKey ? isolate(id) : onSelect(id))} title={`${hub.type} · ${hub.subtreeCount} notes in subtree · Alt-click to isolate`}>
+          <button className="tree-label" onClick={() => onFocusHub(id)} title={`${hub.type} · ${hub.subtreeCount} notes · click to focus this group and open its note, click again to unfocus`}>
             {colorMode === "home" ? (
               <span className="swatch" style={{ background: homeIndex.palettes[homeLevel].get(id), borderRadius: hub.type === "Project" ? 2 : "50%" }} />
             ) : (
@@ -128,12 +125,6 @@ export function Sidebar(p: Props) {
             )}
             <span className="name">{hub.title}</span>
             <span className="count">{hub.subtreeCount}</span>
-          </button>
-          <button className={`iso${hubSpot(id) ? " on" : ""}`} onClick={() => spotHub(id)} title={hubSpot(id) ? "Stop highlighting this group" : "Highlight every note of this group and fade the rest"}>
-            {hubSpot(id) ? "unfocus" : "focus"}
-          </button>
-          <button className={`iso${isolated ? " on" : ""}`} onClick={() => isolate(id)} title={isolated ? "Show all notes again" : "Hide every note outside this group (the view does not move)"}>
-            {isolated ? "all" : "only"}
           </button>
         </div>
         {open && hub.children.length > 0 && <ul className="tree">{hub.children.map(renderHub)}</ul>}
@@ -147,9 +138,9 @@ export function Sidebar(p: Props) {
         <header>
           <h2>Home</h2>
           <span className="header-tools">
-            {filters.subtree && (
-              <button className="link small" onClick={() => onChange({ ...filters, subtree: null })}>
-                show all
+            {filters.spotlight?.kind === "hub" && (
+              <button className="link small" onClick={() => onChange({ ...filters, spotlight: null })}>
+                unfocus
               </button>
             )}
             <button className={`pill-toggle${colorMode === "home" ? " on" : ""}`} onClick={() => p.onColorMode("home", homeLevel)} title="Colour the graph by home group">
@@ -214,10 +205,11 @@ export function Sidebar(p: Props) {
                 unfocus
               </button>
             )}
-            <span className="muted small">
-              <button className="link" onClick={() => setAll("types", true)}>all</button> ·{" "}
-              <button className="link" onClick={() => setAll("types", false)}>none</button>
-            </span>
+            {types.some((t) => !filters.types.has(t.name)) && (
+              <button className="link small" onClick={() => setAll("types", true)} title="Show every hidden type again">
+                show all
+              </button>
+            )}
             <button className={`pill-toggle${colorMode === "type" ? " on" : ""}`} onClick={() => p.onColorMode("type", homeLevel)} title="Colour the graph by note type">
               {colorMode === "type" ? "● colouring" : "colour by this"}
             </button>
@@ -236,22 +228,14 @@ export function Sidebar(p: Props) {
                   <button className="disclosure" onClick={() => setOpenTypes(toggleIn(openTypes, t.name))} aria-label={open ? "Collapse" : "Expand"}>
                     {open ? "▾" : "▸"}
                   </button>
-                  <button className="tree-label" onClick={(e) => toggle("types", t.name, e.altKey)} title="Click to show/hide, Alt-click to isolate this type">
+                  <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes · click to focus this type, click again to unfocus`}>
                     {colorMode === "type" ? <span className="swatch" style={{ background: typeColors.get(t.name) }} /> : <span className="glyph muted">{glyphFor(t.name)}</span>}
                     <span className="name">{t.name}</span>
                     <span className="count">{t.count}</span>
                   </button>
-                  <button className={`iso${typeSpot(t.name) ? " on" : ""}`} onClick={() => spotType(t.name)} title={typeSpot(t.name) ? "Stop highlighting this type" : "Highlight every note of this type and fade the rest"}>
-                    {typeSpot(t.name) ? "unfocus" : "focus"}
+                  <button className={`iso${on ? "" : " on"}`} onClick={() => toggle("types", t.name)} title={on ? "Hide this type from the graph" : "Show this type again"}>
+                    {on ? "hide" : "hidden"}
                   </button>
-                  {(() => {
-                    const onlyThis = filters.types.size === 1 && filters.types.has(t.name);
-                    return (
-                      <button className={`iso${onlyThis ? " on" : ""}`} onClick={() => toggle("types", t.name, true)} title={onlyThis ? "Show all types again" : "Hide every other type (the view does not move)"}>
-                        {onlyThis ? "all" : "only"}
-                      </button>
-                    );
-                  })()}
                 </div>
                 {open && (
                   <ul className="instances">
