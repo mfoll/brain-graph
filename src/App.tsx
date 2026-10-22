@@ -264,7 +264,8 @@ export default function App() {
       if (raw) {
         const v = JSON.parse(raw) as Partial<LayoutSettings> & Record<string, unknown>;
         next = { ...DEFAULT_LAYOUT, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULT_LAYOUT)) } as LayoutSettings;
-        if (typeof v.hierarchyWeight === "number" && !("structurePull" in v)) next.structurePull = v.hierarchyWeight; // older saves
+        // Older saves used other pull settings on a different scale: start them at the new default ratio.
+        if (!("ratio" in v)) next.ratio = DEFAULT_LAYOUT.ratio;
       }
     } catch {
       /* ignore */
@@ -345,9 +346,9 @@ export default function App() {
 
   // Hierarchy pull is an edge attribute read by the layout on every step.
   useEffect(() => {
-    if (graph) applyEdgeWeights(graph, layoutSettings.structurePull, layoutSettings.lateralPull);
-    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.structurePull, layoutSettings.lateralPull);
-  }, [graph, filteredGraph, layoutSettings.structurePull, layoutSettings.lateralPull]);
+    if (graph) applyEdgeWeights(graph, layoutSettings.ratio);
+    if (filteredGraph) applyEdgeWeights(filteredGraph, layoutSettings.ratio);
+  }, [graph, filteredGraph, layoutSettings.ratio]);
 
   // Colours are node attributes, so switching mode never rebuilds the renderer.
   useEffect(() => {

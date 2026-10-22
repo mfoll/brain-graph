@@ -35,7 +35,7 @@ export interface EdgeAttrs {
 export const isHierarchyKind = (kind: string) => kind === "belongs_to" || kind === "has" || kind.startsWith("parent_");
 /** Body wikilinks are the noisiest lateral links and count for less than a declared relationship. */
 const LATERAL_FACTOR: Record<string, number> = { body: 0.4 };
-export const edgeWeight = (kind: string, structure = 4, lateral = 1) => (isHierarchyKind(kind) ? structure : lateral * (LATERAL_FACTOR[kind] ?? 1));
+export const edgeWeight = (kind: string, ratio = 6) => (isHierarchyKind(kind) ? ratio : LATERAL_FACTOR[kind] ?? 1);
 
 /** Layout parameters the user can tune; see the Layout section of the sidebar. */
 export interface LayoutSettings {
@@ -43,23 +43,17 @@ export interface LayoutSettings {
   nodeScale: number;
   /** ForceAtlas2 gravity: pull towards the centre. Lower = groups drift apart. */
   gravity: number;
-  /** Pull of structure links (belongs_to, has, parent_*): how tightly a note sticks to its group. */
-  structurePull: number;
-  /** Pull of lateral links (related_to, body, custom keys): how much cross-links bend the map. */
-  lateralPull: number;
+  /** How many times harder a structure link (belongs_to, has, parent_*) pulls than a lateral one. 1–10. */
+  ratio: number;
 }
-export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, structurePull: 4, lateralPull: 1 };
+export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, ratio: 6 };
 
-/** Links that pull less are drawn thinner and lighter; emphasis is the pull relative to its default. */
-export function applyEdgeWeights(graph: BrainGraph, structurePull: number, lateralPull: number): void {
-  graph.updateEachEdgeAttributes(
-    (_e, a) => ({
-      ...a,
-      weight: edgeWeight(a.kind, structurePull, lateralPull),
-      emphasis: isHierarchyKind(a.kind) ? structurePull / DEFAULT_LAYOUT.structurePull : lateralPull / DEFAULT_LAYOUT.lateralPull,
-    }),
-    { attributes: ["weight", "emphasis"] },
-  );
+/** Lateral links are drawn lighter as the ratio grows: emphasis 1 at ratio 1, 0.2 at the default ratio of 6. */
+export const lateralEmphasis = (ratio: number) => Math.pow(ratio, -0.9);
+
+export function applyEdgeWeights(graph: BrainGraph, ratio: number): void {
+  const lateral = lateralEmphasis(ratio);
+  graph.updateEachEdgeAttributes((_e, a) => ({ ...a, weight: edgeWeight(a.kind, ratio), emphasis: isHierarchyKind(a.kind) ? 1 : lateral }), { attributes: ["weight", "emphasis"] });
 }
 
 /**
@@ -174,7 +168,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   }
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: 1 });
+      graph.addEdgeWithKey(`${e.source}|${e.kind}|${e.target}`, e.source, e.target, { kind: e.kind, weight: edgeWeight(e.kind), emphasis: isHierarchyKind(e.kind) ? 1 : lateralEmphasis(DEFAULT_LAYOUT.ratio) });
     }
   }
   // Seed positions deterministically so a first layout is reproducible between reloads.

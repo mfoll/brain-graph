@@ -89,25 +89,26 @@ export function Sidebar(p: Props) {
   const ls = layoutSettings;
   const layoutIsDefault = JSON.stringify({ ...ls, nodeScale: 1 }) === JSON.stringify(DEFAULT_LAYOUT);
 
-  // Facets: scalar frontmatter keys shared by enough notes and with few distinct values (a status, a
-  // kind, a period), not identifiers or URLs; `status` first when present.
+  // Facets: frontmatter keys worth listing under a type. `status` always comes first when present.
+  // Other keys must be shared by several types (a key used by one family of notes is that family's
+  // business), carried by enough notes, and have few distinct values (identifiers and dates excluded).
   const facetKeys = (() => {
     const counts = new Map<string, number>();
     const values = new Map<string, Set<string>>();
+    const typesOf = new Map<string, Set<string>>();
     for (const n of data.nodes) {
       for (const [k, v] of Object.entries(n.properties)) {
         if (k === "type" || k.startsWith("_") || (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean")) continue;
         counts.set(k, (counts.get(k) ?? 0) + 1);
         (values.get(k) ?? values.set(k, new Set()).get(k)!).add(String(v));
+        (typesOf.get(k) ?? typesOf.set(k, new Set()).get(k)!).add(n.type ?? "(untyped)");
       }
     }
-    const min = Math.max(5, data.nodes.length * 0.05);
     const keys = [...counts.entries()]
-      .filter(([k, c]) => c >= min && (values.get(k)?.size ?? 0) <= 25 && (values.get(k)?.size ?? 0) < c / 2)
+      .filter(([k, c]) => k !== "status" && c >= data.nodes.length * 0.1 && (typesOf.get(k)?.size ?? 0) >= 3 && (values.get(k)?.size ?? 0) <= 12)
       .sort((a, b) => b[1] - a[1])
       .map(([k]) => k);
-    if (keys.includes("status")) return ["status", ...keys.filter((k) => k !== "status")];
-    return keys;
+    return counts.has("status") ? ["status", ...keys] : keys;
   })();
   const [facetKey, setFacetKey] = useState<string>(() => facetKeys[0] ?? "status");
   const facetsOf = (type: string): [string, number][] => {
@@ -118,7 +119,7 @@ export function Sidebar(p: Props) {
       if (v === undefined || v === null || v === "") continue;
       counts.set(String(v), (counts.get(String(v)) ?? 0) + 1);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
   };
   const facetSpot = (type: string, value: string) => filters.spotlight?.kind === "facet" && filters.spotlight.type === type && filters.spotlight.key === facetKey && filters.spotlight.value === value;
   const spotFacet = (type: string, value: string) => onChange({ ...filters, spotlight: facetSpot(type, value) ? null : { kind: "facet", type, key: facetKey, value } });
@@ -443,24 +444,18 @@ export function Sidebar(p: Props) {
               )
             }
           >
-            <div className="muted small hint">Where notes sit. Slider changes apply live in a short update run. Links pull notes together; structure links (belongs_to, has, parent_*) say where a note belongs, lateral links (related_to, body, custom keys) are context.</div>
+            <div className="muted small hint">Where notes sit. Slider changes apply live in a short update run. Structure links (belongs_to, has, parent_*) say where a note belongs; lateral links (related_to, body, custom keys) are context and pull less, by the ratio below. They are also drawn lighter as the ratio grows.</div>
             <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
               <span>
                 Gravity: <strong>{ls.gravity}</strong>
               </span>
               <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
             </label>
-            <label className="row column" title="How tightly a note sticks to the group it belongs to.">
+            <label className="row column" title="A structure link pulls this many times harder than a lateral one. At 1 all links pull alike; at 10 the map is almost pure hierarchy. Body wikilinks always count for 40% of a lateral link.">
               <span>
-                Structure links pull: <strong>{ls.structurePull}×</strong>
+                Structure over lateral: <strong>{ls.ratio}×</strong>
               </span>
-              <input type="range" min={0.5} max={10} step={0.5} value={ls.structurePull} onChange={(e) => onLayoutSettings({ ...ls, structurePull: Number(e.target.value) })} />
-            </label>
-            <label className="row column" title="How much cross-links bend the map. Body wikilinks always count for 40% of this.">
-              <span>
-                Lateral links pull: <strong>{ls.lateralPull}×</strong>
-              </span>
-              <input type="range" min={0} max={4} step={0.1} value={ls.lateralPull} onChange={(e) => onLayoutSettings({ ...ls, lateralPull: Number(e.target.value) })} />
+              <input type="range" min={1} max={10} step={0.5} value={ls.ratio} onChange={(e) => onLayoutSettings({ ...ls, ratio: Number(e.target.value) })} />
             </label>
             <div className="row buttons">
               <button className="button" onClick={p.onResetLayout} disabled={p.layoutRunning} title="Lay the whole map out again from scratch (8 s). Use after changing the pulls a lot, or when the map has drifted. The current map is kept as the previous layout.">
