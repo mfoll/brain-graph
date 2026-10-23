@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
-import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, defaultLinkRole, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type LinkRole, type PaletteId } from "../graph/home";
+import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, defaultLinkRole, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type LinkRole, type PaletteId } from "../graph/home";
 
 const ROLE_LABEL: Record<LinkRole, string> = { up: "→ parent", down: "→ children", lateral: "lateral" };
 const ROLE_GLYPH: Record<LinkRole, string> = { up: "↑", down: "↓", lateral: "↔" };
@@ -25,7 +25,7 @@ export interface Filters {
   /** Show every note's label (density-managed) instead of only hovered / selected ones. */
   labels: boolean;
   /** Highlight every note of a type or of a home group and fade the rest (nothing is hidden). */
-  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "search"; query: string } | { kind: "unassigned" } | null;
+  spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "search"; query: string } | { kind: "unassigned" } | { kind: "outside" } | null;
   /** Show wikilink targets that resolve to no note, as grey ghost nodes. */
   ghosts: boolean;
   /** Show the notes of other registered vaults that this vault's frontmatter paths point to, as rectangles. */
@@ -64,6 +64,8 @@ interface Props {
   onFocusHub: (id: string) => void;
   /** Notes that reach no group at all. */
   unassignedCount: number;
+  /** Notes outside the hierarchy by design (exempt types, archived and Inbox notes, parentless Persons). */
+  outsideCount: number;
   layoutSettings: LayoutSettings;
   onLayoutSettings: (s: LayoutSettings) => void;
   layoutRunning: boolean;
@@ -101,7 +103,7 @@ function Section({ id, title, badge, tools, open, onToggle, children }: SectionP
 const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 
 export function Sidebar(p: Props) {
-  const { data, types, homeIndex, homeSettings, homeDefaults, leafTypes, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, layoutSettings, onLayoutSettings } = p;
+  const { data, types, homeIndex, homeSettings, homeDefaults, leafTypes, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, outsideCount, layoutSettings, onLayoutSettings } = p;
   const ls = layoutSettings;
   const layoutIsDefault = JSON.stringify({ ...ls, nodeScale: 1 }) === JSON.stringify(DEFAULT_LAYOUT);
 
@@ -140,6 +142,7 @@ export function Sidebar(p: Props) {
   const facetSpot = (type: string, value: string) => filters.spotlight?.kind === "facet" && filters.spotlight.type === type && filters.spotlight.key === facetKey && filters.spotlight.value === value;
   const spotFacet = (type: string, value: string) => onChange({ ...filters, spotlight: facetSpot(type, value) ? null : { kind: "facet", type, key: facetKey, value } });
   const unassignedSpot = filters.spotlight?.kind === "unassigned";
+  const outsideSpot = filters.spotlight?.kind === "outside";
   const glyphFor = (type: string) => SHAPE_GLYPH[shapeFor(type, homeSettings)];
   const [tab, setTabState] = useState<"explore" | "settings">(() => {
     try {
@@ -292,6 +295,16 @@ export function Sidebar(p: Props) {
                     <span className="glyph muted">○</span>
                     <span className="name muted">Unassigned</span>
                     <span className="count">{unassignedCount}</span>
+                  </button>
+                </div>
+              </li>
+              <li className={`tree-row unassigned${outsideSpot ? " spotlit" : ""}`} title="Notes outside the hierarchy by design, drawn in a pale neutral: Recaps, Guides, Operations, types flagged hierarchy_exempt, archived and Inbox notes, and Persons with no affiliation or related group. Not counted as unassigned.">
+                <div className="tree-line">
+                  <button className="disclosure empty" aria-hidden="true" />
+                  <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: outsideSpot ? null : { kind: "outside" } })}>
+                    <span className="glyph" style={{ color: OUTSIDE_COLOR }}>●</span>
+                    <span className="name muted">Outside the hierarchy</span>
+                    <span className="count">{outsideCount}</span>
                   </button>
                 </div>
               </li>

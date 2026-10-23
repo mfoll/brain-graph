@@ -17,9 +17,9 @@ export interface HomeSettings {
   roles?: Record<string, LinkRole>;
   /** Types whose notes sit outside the hierarchy by design; default: defaultExemptTypes(data). */
   exemptTypes?: Set<string>;
-  /** Root types: an up-link from one of them to a note of another type is ignored (default Responsibility). */
+  /** Root types: an up-link from one of them to a note of another type is ignored (default Responsibility), unless that note is a flagged root (`hierarchy_root: true`). */
   rootTypes?: Set<string>;
-  /** Types that, with no parent, take the home of their first lateral link to a hub (default Person). */
+  /** Types that, with no parent, take the home of their first lateral link to a hub, or else sit outside the hierarchy (default Person). */
   lateralHomeTypes?: Set<string>;
 }
 
@@ -30,6 +30,13 @@ export function defaultExemptTypes(data: VaultGraph): Set<string> {
   for (const n of data.nodes) if (n.type === "Type" && n.properties.hierarchy_exempt === true) set.add(n.title);
   return set;
 }
+
+/** A note the vault deliberately lets root an area (ADR 0028: a Topic with `hierarchy_root: true`). */
+export const isFlaggedRoot = (n: NoteNode | undefined) => n?.properties.hierarchy_root === true;
+/** A note allowed two parents at the same distance: its alternatives are not ambiguity. */
+export const acceptsDoubleParent = (n: NoteNode | undefined) => n?.properties.accepted_double_parent === true;
+/** An Inbox note (`_organized: false` or `status: Unprocessed`), whose home Process Inbox has not decided yet. */
+export const isInbox = (n: NoteNode) => n.properties._organized === false || n.status === "Unprocessed";
 
 /** Tolaria's conventions: belongs_to and parent_* point to the parent, has points to children, the rest is lateral. */
 export function defaultLinkRole(kind: string): LinkRole {
@@ -109,8 +116,10 @@ export interface NoteHome {
   depth: number;
   alternatives: string[];
   viaHas: boolean;
-  /** Outside the hierarchy by design (exempt type or archived): no home, but not unassigned either. */
+  /** Outside the hierarchy by design (exempt type, archived, Inbox, parentless Person with no related group): no home, but not unassigned either. */
   exempt: boolean;
+  /** Homed through a lateral link (a parentless Person coloured by its first related group), not through belongs_to. */
+  lateral: boolean;
   /** Steps from the note to its hub, nearest first: which relationship led to which note. */
   path: { via: string; id: string }[];
 }
@@ -126,6 +135,8 @@ export interface HomeIndex {
 }
 
 const UNHOMED = "#8b8f98";
+/** Notes outside the hierarchy by design: a pale stone neutral, distinct from the grey of unassigned notes. */
+export const OUTSIDE_COLOR = "#c2b8a8";
 
 /** Sigma's WebGL colour parser wants hex, so build hex from HSL ourselves. */
 function hsl(h: number, s: number, l: number): string {
@@ -161,8 +172,9 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
   for (const e of data.edges) {
     const role = linkRole(e.kind, settings);
     if (role === "up") {
-      // A root type (Responsibility) answers for itself: its link to a Topic or Project is context, not a parent.
-      if (rootTypes.has(typeOf(e.source)) && !rootTypes.has(typeOf(e.target))) continue;
+      // A root type (Responsibility) answers for itself: its link to a Topic or Project is context, not a parent,
+      // except a link to a flagged root Topic, which roots the area on purpose.
+      if (rootTypes.has(typeOf(e.source)) && !rootTypes.has(typeOf(e.target)) && !isFlaggedRoot(byId.get(e.target))) continue;
       link(strong, e.source, e.target, e.kind);
       link(both, e.source, e.target, e.kind);
     } else if (role === "down") link(both, e.target, e.source, e.kind);
@@ -182,6 +194,7 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
       alternatives: picked.slice(1).map((s) => s.id),
       viaHas: picked[0].path.some((p) => linkRole(p.via, settings) === "down"),
       exempt: false,
+      lateral: false,
       path: picked[0].path,
     });
     for (let depth = 1; depth <= 8 && frontier.length; depth++) {
@@ -196,20 +209,23 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
     return fallback;
   };
 
+  const none = (outside: boolean): NoteHome => ({ hub: null, depth: 0, alternatives: [], viaHas: false, exempt: outside, lateral: false, path: [] });
   const homes = new Map<string, NoteHome>();
   for (const n of data.nodes) {
     if (n.type === "Type") continue;
     if (exempt.has(n.type ?? "") || n.archived) {
-      homes.set(n.id, { hub: null, depth: 0, alternatives: [], viaHas: false, exempt: true, path: [] });
+      homes.set(n.id, none(true));
       continue;
     }
     let h = walk(n.id, strong) ?? (settings.useHas ? walk(n.id, both) : null);
-    // A parentless Person is coloured by the first hub it relates to (an external contact's project).
-    if (!h && lateralTypes.has(n.type ?? "")) {
+    // A parentless Person is coloured by the first hub it relates to (an external contact's project);
+    // with none, it is an external contact without an affiliation hub, parentless on purpose (ADR 0028).
+    const lateralType = lateralTypes.has(n.type ?? "");
+    if (!h && lateralType) {
       const p = (lateral.get(n.id) ?? []).find((x) => isHub(x.id));
-      if (p) h = { hub: p.id, depth: 1, alternatives: [], viaHas: false, exempt: false, path: [p] };
+      if (p) h = { hub: p.id, depth: 1, alternatives: [], viaHas: false, exempt: false, lateral: true, path: [p] };
     }
-    homes.set(n.id, h ?? { hub: null, depth: 0, alternatives: [], viaHas: false, exempt: false, path: [] });
+    homes.set(n.id, h ?? none(lateralType || isInbox(n)));
   }
   return homes;
 }
@@ -312,9 +328,24 @@ export function homeChain(note: NoteNode, index: HomeIndex): string[] {
   return chain;
 }
 
+/** A note the audit asks to home: not a group itself, no group reached, and not outside the hierarchy by design. */
+export function isUnassigned(note: NoteNode, index: HomeIndex): boolean {
+  const h = index.homes.get(note.id);
+  return note.type !== "Type" && !index.hubs.has(note.id) && !h?.hub && !h?.exempt;
+}
+
+/** Why a note sits outside the hierarchy, for the panel and hover; null when it does not. */
+export function outsideReason(note: NoteNode, index: HomeIndex): string | null {
+  if (index.hubs.has(note.id) || !index.homes.get(note.id)?.exempt) return null;
+  if (note.archived) return "archived";
+  if (index.settings.lateralHomeTypes?.has(note.type ?? "") ?? note.type === "Person") return "no affiliation group";
+  if (isInbox(note)) return "in the Inbox";
+  return `${note.type} notes`;
+}
+
 export function homeColor(note: NoteNode, index: HomeIndex, level: HomeLevel): string {
   const chain = homeChain(note, index);
-  if (!chain.length) return UNHOMED;
+  if (!chain.length) return index.homes.get(note.id)?.exempt ? OUTSIDE_COLOR : UNHOMED;
   return index.palettes[level].get(chain[0]) ?? UNHOMED;
 }
 

@@ -3,7 +3,7 @@ import type { NoteNode, VaultGraph } from "../types";
 import { NoteReader } from "./NoteReader";
 import type { BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
-import { SHAPE_GLYPH, homeChain, shapeFor, subtreeMembers, type HomeIndex } from "../graph/home";
+import { SHAPE_GLYPH, acceptsDoubleParent, homeChain, outsideReason, shapeFor, subtreeMembers, type HomeIndex } from "../graph/home";
 
 interface Props {
   data: VaultGraph;
@@ -141,8 +141,9 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
               </button>
             </span>
           ))}
-          {noteHome && noteHome.alternatives.length > 0 && <span className="muted small"> (+{noteHome.alternatives.length} other parent)</span>}
+          {noteHome && noteHome.alternatives.length > 0 && <span className="muted small"> (+{noteHome.alternatives.length} other parent{acceptsDoubleParent(node) ? ", accepted" : ""})</span>}
           {noteHome?.viaHas && <span className="muted small"> (via has)</span>}
+          {noteHome?.lateral && <span className="muted small"> (related group: no belongs_to)</span>}
           {noteHome && noteHome.path.length > 0 && (
             <button className="link small why" onClick={() => setShowWhy((v) => !v)} title="How the viewer decided where this note belongs">
               {showWhy ? "hide why" : "why?"}
@@ -162,10 +163,10 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
               </button>
             </span>
           ))}
-          {noteHome.alternatives.length > 0 && <div>Other parents at the same distance: {noteHome.alternatives.map((id) => byId.get(id)?.title ?? id).join(", ")}; the first listed wins.</div>}
+          {noteHome.alternatives.length > 0 && <div>Other parents at the same distance: {noteHome.alternatives.map((id) => byId.get(id)?.title ?? id).join(", ")}; the first listed wins{acceptsDoubleParent(node) ? " (accepted_double_parent: true)" : ""}.</div>}
         </div>
       )}
-      {!chain.length && !isHub && <div className="crumbs muted small">No group: no belongs_to chain from this note reaches a group note.</div>}
+      {!chain.length && !isHub && <div className="crumbs muted small">{outsideReason(node, homeIndex) ? `Outside the hierarchy by design (${outsideReason(node, homeIndex)}).` : "No group: no belongs_to chain from this note reaches a group note."}</div>}
       <div className="actions">
         <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>
         <button className="button" onClick={() => navigator.clipboard?.writeText(`[[${node.folder ? node.id : node.stem}]]`)}>Copy wikilink</button>

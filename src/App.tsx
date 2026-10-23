@@ -4,7 +4,7 @@ import { NotePanel, type PanelTab } from "./components/NotePanel";
 import { ExternalPanel } from "./components/ExternalPanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
-import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
+import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, isUnassigned, outsideReason, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
@@ -133,11 +133,11 @@ const spotlightToParam = (sp: Spotlight) => {
   if (sp.kind === "hub") return `hub:${sp.id}`;
   if (sp.kind === "facet") return `facet:${sp.type}:${sp.key}:${sp.value}`;
   if (sp.kind === "search") return `search:${sp.query}`;
-  return "unassigned";
+  return sp.kind;
 };
 const paramToSpotlight = (v: string | null): Spotlight => {
   if (!v) return null;
-  if (v === "unassigned") return { kind: "unassigned" };
+  if (v === "unassigned" || v === "outside") return { kind: v };
   if (v.startsWith("type:")) return { kind: "type", value: v.slice(5) };
   if (v.startsWith("hub:")) return { kind: "hub", id: v.slice(4) };
   if (v.startsWith("search:") && v.length > 7) return { kind: "search", query: v.slice(7) };
@@ -512,9 +512,11 @@ export default function App() {
     } else if (sp.kind === "search") {
       const q = sp.query.toLowerCase();
       for (const n of data.nodes) if ((n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) && !hidden.has(n.id)) set.add(n.id);
+    } else if (sp.kind === "outside") {
+      for (const n of data.nodes) if (outsideReason(n, homeIndex) && !hidden.has(n.id)) set.add(n.id);
     } else {
-      // Unassigned: notes that are not groups themselves and whose chain reaches no group.
-      for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !homeIndex.homes.get(n.id)?.exempt && !hidden.has(n.id)) set.add(n.id);
+      // Unassigned: notes that are not groups themselves, reach no group and are not outside by design.
+      for (const n of data.nodes) if (isUnassigned(n, homeIndex) && !hidden.has(n.id)) set.add(n.id);
     }
     // Notes of other vaults and missing targets follow the notes that link to them.
     filteredGraph?.forEachNode((n, a) => {
@@ -540,10 +542,8 @@ export default function App() {
       .filter((t) => t.count >= 10)
       .sort((a, b) => b.count - a.count);
   }, [data, filteredGraph]);
-  const unassignedCount = useMemo(
-    () => (data && homeIndex ? data.nodes.filter((n) => n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !homeIndex.homes.get(n.id)?.exempt).length : 0),
-    [data, homeIndex],
-  );
+  const unassignedCount = useMemo(() => (data && homeIndex ? data.nodes.filter((n) => isUnassigned(n, homeIndex)).length : 0), [data, homeIndex]);
+  const outsideCount = useMemo(() => (data && homeIndex ? data.nodes.filter((n) => outsideReason(n, homeIndex)).length : 0), [data, homeIndex]);
 
   const matches = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
@@ -691,7 +691,7 @@ export default function App() {
   const stateParts: { label: string; title: string; clear: () => void }[] = [];
   if (filters.spotlight) {
     const sp = filters.spotlight;
-    const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : sp.kind === "search" ? `“${sp.query}” (${spotlight?.size ?? 0})` : "unassigned notes";
+    const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : sp.kind === "search" ? `“${sp.query}” (${spotlight?.size ?? 0})` : sp.kind === "outside" ? "notes outside the hierarchy" : "unassigned notes";
     stateParts.push({ label: `focused: ${what}`, title: "Everything else is faded. Click × to unfocus.", clear: () => setFilters((f) => ({ ...f, spotlight: null })) });
   }
   const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type");
@@ -871,6 +871,7 @@ export default function App() {
         onSelect={(id) => select(id, true)}
         onFocusHub={focusHub}
         unassignedCount={unassignedCount}
+        outsideCount={outsideCount}
         layoutSettings={layoutSettings}
         onLayoutSettings={setLayoutSettings}
         layoutRunning={layoutRun !== null}
@@ -920,12 +921,19 @@ export default function App() {
             <div className="tip-head">
               <span className="type-tag" style={typeTagStyle(hoveredNode.type)}>{typeTag(hoveredNode.type)}</span>
               {(() => {
-                const h = homeIndex.homes.get(hoveredNode.id)?.hub;
-                const groupId = homeIndex.hubs.has(hoveredNode.id) ? hoveredNode.id : h;
+                const home = homeIndex.homes.get(hoveredNode.id);
+                const groupId = homeIndex.hubs.has(hoveredNode.id) ? hoveredNode.id : home?.hub;
+                const outside = outsideReason(hoveredNode, homeIndex);
                 return groupId ? (
                   <span className="group-tag">
                     <span className="dot" style={{ background: mapColor(hoveredNode.id) }} />
                     {byId.get(groupId)?.title ?? groupId}
+                    {home?.lateral && <span title="No belongs_to: coloured by the first group it is related to"> (related)</span>}
+                  </span>
+                ) : outside ? (
+                  <span className="group-tag">
+                    <span className="dot" style={{ background: OUTSIDE_COLOR }} />
+                    outside the hierarchy: {outside}
                   </span>
                 ) : null;
               })()}
