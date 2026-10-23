@@ -110,6 +110,7 @@ function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters
     linkOpacity: v.linkOpacity ?? 0.3,
     ghosts: v.ghosts ?? false,
     bridges: v.bridges ?? true,
+    activity: v.activity ?? true,
     linkWidth: v.linkWidth ?? 1,
     labelThreshold: v.labelThreshold ?? 7,
     types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
@@ -279,6 +280,7 @@ export default function App() {
     labelThreshold: 7,
     ghosts: false,
     bridges: true,
+    activity: true,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -722,6 +724,7 @@ export default function App() {
   if (filters.collapseTypes.length) stateParts.push({ label: filters.collapseTypes.length === 1 ? `${filters.collapseTypes[0]} collapsed` : `${filters.collapseTypes.length} types collapsed`, title: `${filters.collapseTypes.join(", ")} notes are counted on their parent`, clear: () => setFilters((f) => ({ ...f, collapseTypes: [] })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Notes with few links are hidden", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded", clear: () => setFilters((f) => ({ ...f, recency: false })) });
+  if (!filters.activity) stateParts.push({ label: "activity pulses off", title: "Shown by default", clear: () => setFilters((f) => ({ ...f, activity: true })) });
   if (!filters.bridges && (data.bridges?.length ?? 0) > 0) stateParts.push({ label: "other-vault notes hidden", title: "Shown by default", clear: () => setFilters((f) => ({ ...f, bridges: true })) });
   if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Links to missing notes are shown as grey dots", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are hidden by default", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
@@ -916,6 +919,7 @@ export default function App() {
           showLabels={filters.labels}
           linkOpacity={filters.linkOpacity}
           linkWidth={filters.linkWidth}
+          showActivity={filters.activity}
           labelThreshold={filters.labelThreshold}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}

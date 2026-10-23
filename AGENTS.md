@@ -27,6 +27,10 @@ Instructions for a coding agent asked to install, run or use Brain Graph for a u
 - Links to other vaults are frontmatter paths that resolve to a note of exactly one other registered vault; the server only reads that note's title, type and first paragraph, and the panel reads its text on demand.
 - `graph:homes` and `graph:dump` print the vault's structure to the terminal; that output may contain note titles and summaries. Treat it like the vault's content when deciding where it may be pasted.
 
+## Agent activity hooks
+
+`brain-graph install-hooks` changes the user's Claude Code and Codex configuration (`~/.claude/settings.json`, `~/.codex/hooks.json`), keeping a backup of each. Ask before running it, say which files it changes, and tell the user that Codex needs `/hooks` to trust the new hook. `uninstall-hooks` reverts it. The hook only reports note paths to the local Brain Graph server; it never blocks or changes the agent.
+
 ## Commands useful to an agent
 
 From a checkout (`git clone https://github.com/mfoll/brain-graph && pnpm install`):

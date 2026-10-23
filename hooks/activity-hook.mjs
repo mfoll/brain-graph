@@ -5,10 +5,10 @@
 // 0, and gives up after half a second when Brain Graph is not running.
 //
 //   node activity-hook.mjs <source> [server-url]      source: claude | codex
+// Installed by `brain-graph install-hooks`, which copies it to ~/.config/brain-graph/.
 import os from "node:os";
 import path from "node:path";
-
-const [, , source = "agent", url = process.env.BRAIN_GRAPH_URL ?? "http://127.0.0.1:5178"] = process.argv;
+import { pathToFileURL } from "node:url";
 
 /** Programs that open files to search or list them, not to read them: their file arguments are not reads. */
 const SCANNERS = new Set(["rg", "grep", "egrep", "fgrep", "ag", "ack", "find", "fd", "git", "ls", "tree", "wc", "stat", "du", "file"]);
@@ -57,7 +57,8 @@ function fromShell(command, out, cwd, depth = 0) {
   }
 }
 
-function extract(p) {
+/** The note reads and writes in one PostToolUse payload, as absolute paths. */
+export function extract(p) {
   const tool = String(p.tool_name ?? "");
   const input = p.tool_input ?? {};
   const cwd = typeof p.cwd === "string" ? p.cwd : process.cwd();
@@ -81,13 +82,18 @@ function extract(p) {
     .slice(0, 50);
 }
 
-try {
-  let raw = "";
-  for await (const chunk of process.stdin) raw += chunk;
-  const items = extract(JSON.parse(raw));
-  if (items.length)
-    await fetch(`${url}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, items }), signal: AbortSignal.timeout(500) });
-} catch {
-  /* Brain Graph not running, or a payload this hook does not understand: say nothing. */
+async function main() {
+  const [, , source = "agent", url = process.env.BRAIN_GRAPH_URL ?? "http://127.0.0.1:5178"] = process.argv;
+  try {
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    const items = extract(JSON.parse(raw));
+    if (items.length)
+      await fetch(`${url}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, items }), signal: AbortSignal.timeout(500) });
+  } catch {
+    /* Brain Graph not running, or a payload this hook does not understand: say nothing. */
+  }
+  process.exit(0);
 }
-process.exit(0);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

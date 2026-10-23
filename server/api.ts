@@ -167,7 +167,7 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   const caches = new Map<string, Promise<VaultGraph>>();
   const watchers = new Map<string, ReturnType<typeof chokidar.watch>>();
   const clients = new Map<string, Set<import("node:http").ServerResponse>>();
-  // Proof of concept: notes read or written by other apps reach the vault's open pages as "activity".
+  // Notes read or written by other apps reach the vault's open pages as "activity".
   const sendActivity = (a: Activity) => {
     for (const res of clients.get(a.vault) ?? []) res.write(`event: activity\ndata: ${JSON.stringify(a)}\n\n`);
   };

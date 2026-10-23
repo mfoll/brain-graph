@@ -21,6 +21,7 @@ Brain Graph shows the whole vault at once: how large each project is, where area
 - **Filters.** Hide archived notes, orphans or weakly linked notes. Fold leaf types such as Sources into a count on their parent. Show only the neighbourhood of the selection.
 - **Stable layout.** The map is saved per vault and restored on the next start. New notes are placed next to the note they are most linked to. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
 - **Views and sharing.** Save a combination of filters, focus and colouring as a named view. The URL holds the vault, note and focus, so another note or a report can link to a view. **Export PNG** saves the current picture.
+- **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (orange), then fade over half a minute, so a session leaves a visible trail. Searches do not light up the vault. See [Agent activity](#agent-activity).
 - **Live.** The map updates when a note changes on disk.
 
 ## Install
@@ -43,6 +44,18 @@ brain-graph ~/path/to/vault
 To use it as an app with its own window and Dock icon, open it in Safari and choose **File → Add to Dock**, or in Chrome click the install icon in the address bar. When the server is not running, the app shows the command to start it and reloads by itself once it answers.
 
 Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and for each vault its saved layout and settings. Copy that folder to keep the same maps and settings on another machine. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
+
+## Agent activity
+
+Writes need nothing: the server already watches the vault. Reads come from the agents themselves, through a hook that runs after each tool call:
+
+```bash
+npx github:mfoll/brain-graph install-hooks
+```
+
+This copies the hook script to `~/.config/brain-graph/` and adds it to `~/.claude/settings.json` and `~/.codex/hooks.json`, for whichever of the two is installed, keeping a backup of each file. Name one agent to install only that one, and add `--port` if Brain Graph does not run on 5178. Codex runs a new hook only after you trust it: start `codex` and use `/hooks`. New agent sessions pick the hook up.
+
+The hook reports Read, Edit and Write calls, Codex patches, and shell commands that read notes (`cat`, `sed`, `head` and similar). Search tools (`rg`, `grep`, `find`, `git`) are ignored. It costs about 75 ms per tool call in Claude Code and nothing noticeable in Codex, where it runs in the background, and it stays silent when Brain Graph is not running. Remove it with `npx github:mfoll/brain-graph uninstall-hooks`.
 
 ## Using it
 

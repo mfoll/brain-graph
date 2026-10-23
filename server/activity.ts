@@ -1,4 +1,4 @@
-// Proof of concept: notes read or written by other apps. Agent hooks (hooks/activity-hook.mjs, run by
+// Notes read or written by other apps. Agent hooks (hooks/activity-hook.mjs, run by
 // Claude Code and Codex after each tool call) report the files a tool read or wrote; the vault watcher
 // reports every file change, whichever app made it. Both end up here as Activity events for the page.
 import path from "node:path";

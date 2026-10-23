@@ -34,6 +34,8 @@ export interface GraphViewProps {
   linkOpacity: number;
   /** Link width multiplier. */
   linkWidth: number;
+  /** Pulse notes reported as read or written by other apps. */
+  showActivity: boolean;
   /** Rendered node size from which labels are drawn (zoom-dependent label density). */
   labelThreshold: number;
   /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
@@ -263,11 +265,11 @@ export function GraphView(props: GraphViewProps) {
     // Hull layer behind the WebGL stage, redrawn after every Sigma render.
     const hullBack = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
     const hullFront = sigma.createCanvas("hull-labels", { afterLayer: "stage", style: { pointerEvents: "none" } });
-    // Proof of concept: notes read or written by other apps pulse on their own layer.
+    // Notes read or written by other apps pulse on their own layer.
     const activity = createActivityLayer(sigma as unknown as Sigma, graph, sigma.createCanvas("activity", { afterLayer: "stage", style: { pointerEvents: "none" } }));
     const onActivity = (e: Event) => {
       const a = (e as CustomEvent<{ vault: string; id: string; kind: "read" | "write" }>).detail;
-      if (a.vault === graph.getAttribute("vault")) activity.pulse(a.id, a.kind);
+      if (propsRef.current.showActivity && a.vault === graph.getAttribute("vault")) activity.pulse(a.id, a.kind);
     };
     window.addEventListener("brain-graph-activity", onActivity);
     const redrawHulls = () => {

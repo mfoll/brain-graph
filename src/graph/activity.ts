@@ -1,4 +1,4 @@
-// Proof of concept: pulse notes on the map when another app reads or writes them (see server/activity.ts).
+// Pulse notes on the map when another app reads or writes them (see server/activity.ts).
 // A ripple marks the moment; a glow fades over half a minute so a session leaves a visible trail.
 import type Sigma from "sigma";
 import type { BrainGraph } from "./build";

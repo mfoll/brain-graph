@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Brain Graph: serve the built app and the local vault API, then open the browser.
 //   npx brain-graph [folder ...] [--port 5178] [--no-open]
+//   npx brain-graph install-hooks [claude] [codex] [--port 5178]    let agents report the notes they touch
+//   npx brain-graph uninstall-hooks [claude] [codex]
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -19,9 +21,27 @@ const flag = (name) => {
 };
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`brain-graph [folder ...] [--port N] [--no-open]
+brain-graph install-hooks [claude] [codex] [--port N]
+brain-graph uninstall-hooks [claude] [codex]
 
 Serves Brain Graph at http://localhost:<port>. Folders given here are added to the vault list for this
-run (the first one is selected); vaults registered in Tolaria and folders added in the app are served too.`);
+run (the first one is selected); vaults registered in Tolaria and folders added in the app are served too.
+
+install-hooks adds a hook to Claude Code and Codex (all installed ones, or those named) so the notes they
+read or write pulse on the map. uninstall-hooks removes it.`);
+  process.exit(0);
+}
+if (args[0] === "install-hooks" || args[0] === "uninstall-hooks") {
+  const { installHooks, uninstallHooks } = await import("./hooks.mjs");
+  const sub = args.shift();
+  const hookPort = Number(flag("--port") ?? 5178);
+  const agents = args.filter((a) => !a.startsWith("--"));
+  try {
+    await (sub === "install-hooks" ? installHooks({ port: hookPort, agents }) : uninstallHooks({ agents }));
+  } catch (err) {
+    console.error(String(err instanceof Error ? err.message : err));
+    process.exit(1);
+  }
   process.exit(0);
 }
 const port = Number(flag("--port") ?? process.env.PORT ?? 5178);

@@ -61,12 +61,14 @@ export function useVault(slug: string | null) {
     if (!slug) return;
     const es = new EventSource(`/api/events?${q(slug)}`);
     es.addEventListener("changed", () => setVersion((v) => v + 1));
-    // Proof of concept: reads and writes by other apps, passed to the map as window events.
+    // Reads and writes by other apps, passed to the map as window events.
     es.addEventListener("activity", (e) => {
       const detail = JSON.parse((e as MessageEvent<string>).data) as unknown;
-      const log = ((window as unknown as { __activityLog?: unknown[] }).__activityLog ??= []);
-      log.push(detail);
-      if (log.length > 200) log.shift();
+      if (import.meta.env.DEV) {
+        const log = ((window as unknown as { __activityLog?: unknown[] }).__activityLog ??= []);
+        log.push(detail);
+        if (log.length > 200) log.shift();
+      }
       window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail }));
     });
     return () => es.close();
