@@ -8,6 +8,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { firstH1, buildGraph, slugify, type VaultGraph, firstParagraph, splitFrontmatter } from "./vault.ts";
+import { followActivity } from "./activity.ts";
 import type { Bridge, VaultInfo } from "../shared/types.ts";
 
 export interface VaultApiOptions {
@@ -166,6 +167,13 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   const caches = new Map<string, Promise<VaultGraph>>();
   const watchers = new Map<string, ReturnType<typeof chokidar.watch>>();
   const clients = new Map<string, Set<import("node:http").ServerResponse>>();
+  // Proof of concept: notes read or written by other apps, from a file of Endpoint Security events. Started
+  // when the first page connects, so a build or a script that only loads this module can exit.
+  let stopActivity: (() => void) | null = null;
+  const startActivity = () =>
+    (stopActivity ??= followActivity(path.join(path.dirname(layoutDir), "activity.jsonl"), vaults, (a) => {
+      for (const res of clients.get(a.vault) ?? []) res.write(`event: activity\ndata: ${JSON.stringify(a)}\n\n`);
+    }));
 
   const resolveVault = async (req: import("node:http").IncomingMessage): Promise<{ info: VaultInfo; url: URL } | null> => {
     const url = new URL(req.url ?? "", "http://localhost");
@@ -433,6 +441,7 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
       return res.end();
     }
     watch(v.info);
+    startActivity();
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
     res.write(": connected\n\n");
     const set = clients.get(v.info.slug) ?? clients.set(v.info.slug, new Set()).get(v.info.slug)!;
@@ -460,6 +469,7 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
     return false;
   };
   const close = async () => {
+    stopActivity?.();
     for (const w of watchers.values()) await w.close();
   };
   return { handle, close, vaults, layoutDir };

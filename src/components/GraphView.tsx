@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
+import { createActivityLayer } from "../graph/activity";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import { drawOnCanvas } from "@sigma/export-image";
 import forceAtlas2 from "graphology-layout-forceatlas2";
@@ -262,6 +263,13 @@ export function GraphView(props: GraphViewProps) {
     // Hull layer behind the WebGL stage, redrawn after every Sigma render.
     const hullBack = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
     const hullFront = sigma.createCanvas("hull-labels", { afterLayer: "stage", style: { pointerEvents: "none" } });
+    // Proof of concept: notes read or written by other apps pulse on their own layer.
+    const activity = createActivityLayer(sigma as unknown as Sigma, graph, sigma.createCanvas("activity", { afterLayer: "stage", style: { pointerEvents: "none" } }));
+    const onActivity = (e: Event) => {
+      const a = (e as CustomEvent<{ vault: string; id: string; kind: "read" | "write" }>).detail;
+      if (a.vault === graph.getAttribute("vault")) activity.pulse(a.id, a.kind);
+    };
+    window.addEventListener("brain-graph-activity", onActivity);
     const redrawHulls = () => {
       const h = propsRef.current.hulls;
       if (!h) return clearHulls(hullBack, hullFront);
@@ -405,6 +413,8 @@ export function GraphView(props: GraphViewProps) {
     };
 
     return () => {
+      window.removeEventListener("brain-graph-activity", onActivity);
+      activity.stop();
       container.removeEventListener("mousemove", onMove);
       ro.disconnect();
       propsRef.current.cameraStore.current = sigma.getCamera().getState();

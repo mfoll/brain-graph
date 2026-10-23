@@ -11,5 +11,5 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["server/api.ts", "server/vault.ts", "shared/types.ts"]
+  "include": ["server/api.ts", "server/vault.ts", "server/activity.ts", "shared/types.ts"]
 }
