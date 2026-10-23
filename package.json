@@ -12,7 +12,8 @@
     "graph:dump": "node server/dump.ts",
     "graph:homes": "node server/homes.ts",
     "prepare": "npm run build",
-    "start": "node bin/brain-graph.mjs"
+    "start": "node bin/brain-graph.mjs",
+    "test": "node --test test/vault.test.ts"
   },
   "dependencies": {
     "@sigma/export-image": "^4.0.0",
@@ -55,5 +56,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/mfoll/brain-graph.git"
-  }
+  },
+  "packageManager": "pnpm@12.3.4"
 }

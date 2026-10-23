@@ -82,6 +82,7 @@ VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev   # dev server with hot reload
 
 ```bash
 pnpm typecheck
+pnpm test                                 # parser and grouping on test/fixtures/vault
 pnpm build                                # app and server into dist/, served by bin/brain-graph.mjs
 pnpm start -- ~/path/to/vault             # run the built CLI from the checkout
 pnpm graph:dump ~/my-vault -- --summary   # parser statistics and unresolved links
@@ -90,7 +91,7 @@ pnpm graph:homes ~/my-vault               # the group hierarchy and its problems
 
 `graph:homes` prints the group tree and lists Projects without a proper parent, notes with two parents, notes reached only through `has`, and notes with no group, followed by a summary line. Add `--json` for machine-readable output.
 
-Issues and pull requests are welcome. Keep vault conventions configurable, and run `pnpm typecheck` first.
+Issues and pull requests are welcome. Keep vault conventions configurable, and run `pnpm typecheck` and `pnpm test` first; GitHub Actions runs both, plus the build, on every push.
 
 ### Code layout
 
