@@ -42,7 +42,7 @@ export function VaultManager({ registry, current, onSelect, onAdd, onRemove, onU
           <button className="navbtn close" onClick={onClose} aria-label="Close">×</button>
         </header>
         <p className="muted small">
-          A vault is any folder of Markdown notes with frontmatter. Each one gets its own graph, saved layout and settings. The list is kept in <code>{registry.configPath}</code>.
+          Any folder of Markdown notes can be a vault. The list is saved in <code>{registry.configPath}</code>.
         </p>
         <ul className="vault-list">
           {registry.vaults.map((v) => (
@@ -56,7 +56,7 @@ export function VaultManager({ registry, current, onSelect, onAdd, onRemove, onU
                 </span>
               </button>
               {v.source === "manual" && (
-                <button className="iso on" onClick={() => void onRemove(v.path)} title="Remove from the list (the folder is not touched)">
+                <button className="iso on" onClick={() => void onRemove(v.path)} title="Remove from the list. The folder is not changed.">
                   remove
                 </button>
               )}
@@ -72,9 +72,9 @@ export function VaultManager({ registry, current, onSelect, onAdd, onRemove, onU
           </button>
         </div>
         {error && <div className="small error-text">{error}</div>}
-        <div className="muted small">The path is read by the local server, so it is a path on this machine; <code>~</code> is your home folder. Deep links use <code>tolaria://&lt;slug&gt;/…</code> with the slug made from the label.</div>
+        <div className="muted small">A path on this machine; <code>~</code> is your home folder.</div>
         {registry.tolariaAvailable && (
-          <label className="row" title="Tolaria keeps its own list of vaults; import it so they appear here without adding them by hand.">
+          <label className="row" title="Also list the vaults you have opened in Tolaria">
             <input type="checkbox" checked={registry.useTolaria} onChange={(e) => void onUseTolaria(e.target.checked)} />
             Include the vaults registered in Tolaria
           </label>

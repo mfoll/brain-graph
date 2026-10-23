@@ -92,7 +92,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, level, onS
     const ordered = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
     return (
       <div className="rel-block">
-        <div className="muted small">{members.length} notes roll up to this group, including sub-groups.</div>
+        <div className="muted small">{members.length} notes in this group, including sub-groups.</div>
         {ordered.map(([type, notes]) => (
           <div key={type} className="rel-group">
             <div className="rel-kind">
@@ -145,9 +145,9 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, level, onS
           ))}
           {noteHome && noteHome.alternatives.length > 0 && <span className="muted small"> (+{noteHome.alternatives.length} other parent{acceptsDoubleParent(node) ? ", accepted" : ""})</span>}
           {noteHome?.viaHas && <span className="muted small"> (via has)</span>}
-          {noteHome?.lateral && <span className="muted small"> (related group: no belongs_to)</span>}
+          {noteHome?.lateral && <span className="muted small"> (related, no parent)</span>}
           {noteHome && noteHome.path.length > 0 && (
-            <button className="link small why" onClick={() => setShowWhy((v) => !v)} title="How the viewer decided where this note belongs">
+            <button className="link small why" onClick={() => setShowWhy((v) => !v)} title="Show the links that place this note in its group">
               {showWhy ? "hide why" : "why?"}
             </button>
           )}
@@ -165,10 +165,10 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, level, onS
               </button>
             </span>
           ))}
-          {noteHome.alternatives.length > 0 && <div>Other parents at the same distance: {noteHome.alternatives.map((id) => byId.get(id)?.title ?? id).join(", ")}; the first listed wins{acceptsDoubleParent(node) ? " (accepted_double_parent: true)" : ""}.</div>}
+          {noteHome.alternatives.length > 0 && <div>Also under {noteHome.alternatives.map((id) => byId.get(id)?.title ?? id).join(", ")}{acceptsDoubleParent(node) ? " (accepted)" : ""}. The first parent sets the colour.</div>}
         </div>
       )}
-      {!chain.length && !isHub && <div className="crumbs muted small">{outsideReason(node, homeIndex) ? `Outside the hierarchy by design (${outsideReason(node, homeIndex)}).` : "No group: no belongs_to chain from this note reaches a group note."}</div>}
+      {!chain.length && !isHub && <div className="crumbs muted small">{outsideReason(node, homeIndex) ? `Not placed in a group (${outsideReason(node, homeIndex)}).` : "No group: none of its parent links leads to a group."}</div>}
       <div className="actions">
         <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>
         <button className="button" onClick={() => navigator.clipboard?.writeText(`[[${node.folder ? node.id : node.stem}]]`)}>Copy wikilink</button>

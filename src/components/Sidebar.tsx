@@ -243,7 +243,7 @@ export function Sidebar(p: Props) {
           <button className={`disclosure${hub.children.length ? "" : " empty"}`} onClick={() => setOpenHubs(toggleIn(openHubs, id))} aria-label={open ? "Collapse" : "Expand"}>
             {hub.children.length ? (open ? "▾" : "▸") : ""}
           </button>
-          <button className="tree-label" onClick={() => onFocusHub(id)} title={`${hub.type} · ${hub.subtreeCount} notes · click to focus this group and open its note, click again to unfocus`}>
+          <button className="tree-label" onClick={() => onFocusHub(id)} title={`${hub.type} · ${hub.subtreeCount} notes. Click to focus.`}>
             <span className="glyph" style={{ color: groupColor(homeIndex, id, homeLevel) }} title={hub.type}>
               {glyphFor(hub.type)}
             </span>
@@ -288,7 +288,7 @@ export function Sidebar(p: Props) {
             </div>
             <ul className="tree">
               {homeIndex.roots.map(renderHub)}
-              <li className={`tree-row unassigned${unassignedSpot ? " spotlit" : ""}`} title="Notes whose belongs_to chain reaches no group note. Click to focus them; the audit's target is zero.">
+              <li className={`tree-row unassigned${unassignedSpot ? " spotlit" : ""}`} title="Notes with no group. Click to focus.">
                 <div className="tree-line">
                   <button className="disclosure empty" aria-hidden="true" />
                   <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: unassignedSpot ? null : { kind: "unassigned" } })}>
@@ -298,7 +298,7 @@ export function Sidebar(p: Props) {
                   </button>
                 </div>
               </li>
-              <li className={`tree-row unassigned${outsideSpot ? " spotlit" : ""}`} title="Notes outside the hierarchy by design, drawn in a pale neutral: Recaps, Guides, Operations, types flagged hierarchy_exempt, archived and Inbox notes, and Persons with no affiliation or related group. Not counted as unassigned.">
+              <li className={`tree-row unassigned${outsideSpot ? " spotlit" : ""}`} title="Notes never placed in a group. Click to focus.">
                 <div className="tree-line">
                   <button className="disclosure empty" aria-hidden="true" />
                   <button className="tree-label" onClick={() => onChange({ ...filters, spotlight: outsideSpot ? null : { kind: "outside" } })}>
@@ -320,7 +320,7 @@ export function Sidebar(p: Props) {
             tools={
               <>
                 {facetKeys.length > 1 && (
-                  <select className="facet-select" value={facetKey} onChange={(e) => setFacetKey(e.target.value)} title="Frontmatter key whose values are listed under each expanded type">
+                  <select className="facet-select" value={facetKey} onChange={(e) => setFacetKey(e.target.value)} title="Property whose values are listed under each type">
                     {facetKeys.map((k) => (
                       <option key={k} value={k}>
                         by {k}
@@ -329,7 +329,7 @@ export function Sidebar(p: Props) {
                   </select>
                 )}
                 {hiddenTypes > 0 && (
-                  <button className="link small" onClick={() => setAll("types", true)} title="Show every hidden type again">
+                  <button className="link small" onClick={() => setAll("types", true)} title="Show all types">
                     show all
                   </button>
                 )}
@@ -348,7 +348,7 @@ export function Sidebar(p: Props) {
                       <button className="disclosure" onClick={() => setOpenTypes(toggleIn(openTypes, t.name))} aria-label={open ? "Collapse" : "Expand"}>
                         {open ? "▾" : "▸"}
                       </button>
-                      <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes · click to focus this type, click again to unfocus`}>
+                      <button className="tree-label" onClick={() => spotType(t.name)} title={`${t.count} notes. Click to focus.`}>
                         <span className="glyph muted">{glyphFor(t.name)}</span>
                         <span className="name">{t.name}</span>
                         <span className="count">{t.count}</span>
@@ -415,7 +415,7 @@ export function Sidebar(p: Props) {
                 const st = edgeStyle(k.kind);
                 return (
                   <li key={k.kind} className={on ? "" : "off"}>
-                    <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)} title={on ? "Click to hide these links (Alt-click: show only this kind)" : "Click to show these links again"}>
+                    <button className="tree-label" onClick={(e) => toggle("kinds", k.kind, e.altKey)} title={on ? "Click to hide these links. Alt-click to show only these." : "Click to show these links"}>
                       <span className="edge-swatch" style={{ background: st.color, height: Math.max(1, st.width) }} />
                       <span className="name">
                         {k.kind}
@@ -441,15 +441,14 @@ export function Sidebar(p: Props) {
             onToggle={toggleSection}
             tools={
               !groupingIsDefault && (
-                <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true, palette: homeSettings.palette, roles: {} })} title={`Back to ${homeDefaults.join(", ")}, the Tolaria link roles and the parent → children fallback`}>
+                <button className="link small" onClick={() => p.onHomeSettings({ hubTypes: new Set(homeDefaults), useHas: true, palette: homeSettings.palette, roles: {} })} title={`Back to ${homeDefaults.join(", ")} and the default link roles`}>
                   reset
                 </button>
               )
             }
           >
             <div className="muted small hint">
-              Types that act as groups, each drawn with its own shape in the order picked; other notes are circles. A note joins the nearest group reached through its <code>belongs_to</code> (or{" "}
-              <code>parent_*</code>) chain. Suggested for this vault's types: {homeDefaults.join(", ")}.
+              Group types, in shape order. A note belongs to the nearest group up its <code>belongs_to</code> links. Suggested: {homeDefaults.join(", ")}.
             </div>
             <div className="chips">
               {types
@@ -461,7 +460,7 @@ export function Sidebar(p: Props) {
                   </button>
                 ))}
             </div>
-            <div className="row column" title="Notes of these types sit outside the hierarchy: no group, not counted as unassigned, drawn in a pale neutral and listed under Outside the hierarchy. Archived notes, Inbox notes and parentless people with no related group are outside too. Defaults follow the Second Brain template, plus any type whose Type note has hierarchy_exempt: true.">
+            <div className="row column" title="Notes of these types are never placed in a group">
               <span>Outside the hierarchy</span>
               <div className="chips">
                 {types
@@ -473,7 +472,7 @@ export function Sidebar(p: Props) {
                       <button
                         key={t.name}
                         className={`chip${on ? " on" : ""}`}
-                        title={on ? "Outside the hierarchy. Click to give these notes a group again." : "Click to keep these notes outside the hierarchy"}
+                        title={on ? "Click to place these notes in groups again" : "Click to keep these notes out of groups"}
                         onClick={() => {
                           const next = new Set(exempt);
                           if (on) next.delete(t.name);
@@ -487,7 +486,7 @@ export function Sidebar(p: Props) {
                   })}
               </div>
             </div>
-            <div className="row column" title="What each relationship kind means for the hierarchy. Click a chip to cycle: lateral (context only) → points to the parent (like belongs_to) → points to children (like has). Defaults follow Tolaria's conventions.">
+            <div className="row column" title="What each link kind means. Click to switch between lateral, parent and children.">
               <span>Link roles</span>
               <div className="chips">
                 {edgeKinds.map((k) => {
@@ -500,9 +499,9 @@ export function Sidebar(p: Props) {
                 })}
               </div>
             </div>
-            <label className="row" title="Parent → children kinds (such as `has`) are often used for selective entry points rather than ownership, so they are only followed when the child → parent kinds reach no group.">
+            <label className="row" title="Links such as has are used only when a note has no parent link">
               <input type="checkbox" checked={homeSettings.useHas} onChange={(e) => p.onHomeSettings({ ...homeSettings, useHas: e.target.checked })} />
-              Fall back to parent → children links
+              Use children links when a note has no parent
             </label>
           </Section>
 
@@ -519,39 +518,37 @@ export function Sidebar(p: Props) {
               )
             }
           >
-            <div className="muted small hint">Where notes sit. Slider changes apply live in a short update run. Structure links (belongs_to, has, parent_*) say where a note belongs; lateral links (related_to, body, custom keys) are context and pull less, by the ratio below. They are also drawn lighter as the ratio grows.</div>
-            <label className="row column" title="Pull towards the centre (ForceAtlas2 gravity). Lower lets groups drift apart and the centre empty out; higher packs everything together.">
+            <label className="row column" title="How strongly notes are pulled to the centre. Lower spreads groups apart.">
               <span>
                 Gravity: <strong>{ls.gravity}</strong>
               </span>
               <input type="range" min={0.1} max={3} step={0.1} value={ls.gravity} onChange={(e) => onLayoutSettings({ ...ls, gravity: Number(e.target.value) })} />
             </label>
-            <label className="row column" title="A structure link pulls this many times harder than a lateral one. At 1 all links pull alike; at 10 the map is almost pure hierarchy. Body wikilinks always count for 40% of a lateral link.">
+            <label className="row column" title="How much harder parent and children links pull than other links">
               <span>
-                Structure over lateral: <strong>{ls.ratio}×</strong>
+                Hierarchy pull: <strong>{ls.ratio}×</strong>
               </span>
               <input type="range" min={1} max={10} step={0.5} value={ls.ratio} onChange={(e) => onLayoutSettings({ ...ls, ratio: Number(e.target.value) })} />
             </label>
             <div className="row buttons">
-              <button className="button" onClick={p.onResetLayout} disabled={p.layoutRunning} title="Lay the whole map out again from scratch (8 s). Use after changing the pulls a lot, or when the map has drifted. The current map is kept as the previous layout.">
+              <button className="button" onClick={p.onResetLayout} disabled={p.layoutRunning} title="Lay out the whole map again from scratch. The current layout can be restored.">
                 Reset layout
               </button>
-              <button className="button" onClick={p.onRestoreLayout} disabled={!p.canRestoreLayout} title="Every save keeps the previous positions; this swaps them back (and keeps the current ones as the new previous).">
+              <button className="button" onClick={p.onRestoreLayout} disabled={!p.canRestoreLayout} title="Go back to the layout before the last change">
                 Restore previous layout
               </button>
             </div>
           </Section>
 
           <Section id="appearance" title="Appearance" open={!collapsed.has("appearance")} onToggle={toggleSection}>
-            <div className="muted small hint">How the graph is drawn; nothing here moves or hides a note.</div>
             <div className="subhead">Colour</div>
-            <label className="row column" title="Which level of the hierarchy forms the coloured groups: top-level groups, their direct sub-groups, or every note's nearest group. Regions and group names follow the same level.">
+            <label className="row column" title="Which level of groups gets its own colour, region and name">
               <span>
                 Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
               </span>
               <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
             </label>
-            <div className="row column" title="Colours of the groups, biggest group first; sub-groups take shades of their parent's hue. Regions and names follow.">
+            <div className="row column" title="Sub-groups use shades of their parent's colour">
               <span>Palette</span>
               <div className="palette-grid">
                 {(Object.keys(PALETTES) as PaletteId[]).map((id) => {
@@ -569,61 +566,60 @@ export function Sidebar(p: Props) {
                 })}
               </div>
             </div>
-            <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
+            <label className="row" title="Notes fade after 7, 30 and 90 days without edits">
               <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
               Fade notes not edited recently
             </label>
             <div className="subhead">Regions and names</div>
-            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
+            <label className="row" title="Shade the area of each group">
               <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
               Group regions
             </label>
             {filters.hulls && (
-              <label className="row column indent" title="How far a region extends around its notes and along the links inside the group.">
+              <label className="row column indent" title="How far each region extends around its notes">
                 <span>
                   Region size: <strong>{filters.regionSize}×</strong>
                 </span>
                 <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
               </label>
             )}
-            <label className="row" title="One name per coloured region, so the colour level decides which groups are named: top-level groups, their direct sub-groups, or every note's nearest group. A focused group is always named. A name needs at least four visible notes, sits at their median, and is placed largest group first; a smaller name that finds no free spot on its own region is left out until you zoom in. Names fade while something is hovered or focused.">
+            <label className="row" title="A group needs four visible notes to be named. Zoom in to see more.">
               <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
               Group names
             </label>
             <div className="subhead">Notes and links</div>
-            <label className="row column" title="Multiplies every node's size.">
+            <label className="row column">
               <span>
                 Node size: <strong>{ls.nodeScale}×</strong>
               </span>
               <input type="range" min={0.4} max={2.5} step={0.1} value={ls.nodeScale} onChange={(e) => onLayoutSettings({ ...ls, nodeScale: Number(e.target.value) })} />
             </label>
-            <label className="row column" title="Base opacity of every link. Lateral links are further lightened by the structure-over-lateral ratio.">
+            <label className="row column">
               <span>
                 Link opacity: <strong>{Math.round(filters.linkOpacity * 100)}%</strong>
               </span>
               <input type="range" min={0.1} max={1} step={0.05} value={filters.linkOpacity} onChange={(e) => onChange({ ...filters, linkOpacity: Number(e.target.value) })} />
             </label>
-            <label className="row column" title="Width of every link; structure links stay thicker than lateral ones.">
+            <label className="row column">
               <span>
                 Link width: <strong>{filters.linkWidth}×</strong>
               </span>
               <input type="range" min={0.5} max={2.5} step={0.1} value={filters.linkWidth} onChange={(e) => onChange({ ...filters, linkWidth: Number(e.target.value) })} />
             </label>
             <div className="subhead">Labels</div>
-            <label className="row column" title="Labels appear as you zoom in, once a note is drawn at least this many pixels wide. Lower the threshold to see more labels at the same zoom.">
+            <label className="row column" title="Lower values show more labels at the same zoom">
               <span>
-                Labels appear from <strong>{filters.labelThreshold} px</strong> node size
+                Labels from node size: <strong>{filters.labelThreshold} px</strong>
               </span>
               <input type="range" min={2} max={14} step={1} value={filters.labelThreshold} onChange={(e) => onChange({ ...filters, labelThreshold: Number(e.target.value) })} />
             </label>
-            <label className="row" title="Labels are otherwise shown only for hovered, selected or focused notes.">
+            <label className="row" title="Not only hovered and selected notes">
               <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
               All note labels
             </label>
           </Section>
 
           <Section id="filter" title="Filters" open={!collapsed.has("filter")} onToggle={toggleSection}>
-            <div className="muted small hint">What is shown at all. Each active filter appears as a chip under the header, with its own undo.</div>
             <div className="subhead">Hide</div>
             <label className="row">
               <input type="checkbox" checked={filters.hideArchived} onChange={(e) => onChange({ ...filters, hideArchived: e.target.checked })} />
@@ -633,13 +629,13 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
               Hide orphans (no visible links)
             </label>
-            <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
+            <label className="row column" title="Group notes always stay">
               <span>
-                Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
+                Minimum links per note: <strong>{filters.minDegree === 0 ? "off" : filters.minDegree}</strong>
               </span>
               <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
             </label>
-            <div className="row column" title="Fold the notes of these types into a +N count on the note they belong to. Useful for types that are mostly leaves, such as sources or references; types are ordered by how leaf-like they are.">
+            <div className="row column" title="Hide notes of these types and show their count on the note they belong to">
               <span>Collapse leaf types into their parent</span>
               <div className="chips">
                 {leafTypes.map((t) => {
@@ -648,7 +644,7 @@ export function Sidebar(p: Props) {
                     <button
                       key={t.type}
                       className={`chip${on ? " on" : ""}`}
-                      title={`${t.count} notes, ${Math.round(t.leafShare * 100)}% of them leaves`}
+                      title={`${t.count} notes, ${Math.round(t.leafShare * 100)}% with at most two links`}
                       onClick={() => onChange({ ...filters, collapseTypes: on ? filters.collapseTypes.filter((x) => x !== t.type) : [...filters.collapseTypes, t.type] })}
                     >
                       {t.type} <span className="count">{Math.round(t.leafShare * 100)}%</span>
@@ -657,25 +653,25 @@ export function Sidebar(p: Props) {
                 })}
               </div>
             </div>
-            <label className="row column">
+            <label className="row column" title="Show only notes within this many links of the selected note">
               <span>
-                Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
+                Around the selection: <strong>{filters.focusDepth === 0 ? "off" : `${filters.focusDepth} ${filters.focusDepth === 1 ? "link" : "links"}`}</strong>
                 {!selected && filters.focusDepth > 0 && <span className="muted"> (select a note)</span>}
               </span>
               <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
             </label>
             <div className="subhead">Also show</div>
-            <label className="row" title="Wikilinks whose target is no note in the vault (a typo, a renamed note, a template placeholder). Each distinct target is a grey ghost node linked from the notes that mention it; hover it to see them.">
+            <label className="row" title="Wikilinks to notes that do not exist, shown as grey dots">
               <input type="checkbox" checked={filters.ghosts} onChange={(e) => onChange({ ...filters, ghosts: e.target.checked })} />
               Show missing link targets ({new Set(data.unresolved.map((u) => u.raw.split("|")[0].split("#")[0].trim())).size})
             </label>
             {(data.bridges?.length ?? 0) > 0 && (
-              <label className="row" title="A frontmatter value that is a path to a note of another vault you have registered (an archive record listed by a Project, for instance) is drawn as a rectangle beside the note that lists it. Hover one for its title; click it to read it in the panel.">
+              <label className="row" title="Notes in other vaults that this vault links to, shown as rectangles">
                 <input type="checkbox" checked={filters.bridges} onChange={(e) => onChange({ ...filters, bridges: e.target.checked })} />
                 Show notes from other vaults ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
               </label>
             )}
-            <div className="muted small hint">To hide one type or link kind: Explore → Types (hover a row, "hide") or Explore → Links.</div>
+            <div className="muted small hint">To hide a single type or link kind, use Explore → Types or Links.</div>
           </Section>
         </>
       )}

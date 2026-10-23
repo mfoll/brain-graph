@@ -692,13 +692,13 @@ export default function App() {
   if (filters.spotlight) {
     const sp = filters.spotlight;
     const what = sp.kind === "type" ? sp.value : sp.kind === "hub" ? (byId.get(sp.id)?.title ?? sp.id) : sp.kind === "facet" ? `${sp.type} · ${sp.key} = ${sp.value}` : sp.kind === "search" ? `“${sp.query}” (${spotlight?.size ?? 0})` : sp.kind === "outside" ? "notes outside the hierarchy" : "unassigned notes";
-    stateParts.push({ label: `focused: ${what}`, title: "Everything else is faded. Click × to unfocus.", clear: () => setFilters((f) => ({ ...f, spotlight: null })) });
+    stateParts.push({ label: `focused: ${what}`, title: "Click × to unfocus", clear: () => setFilters((f) => ({ ...f, spotlight: null })) });
   }
   const hiddenTypes = data.types.filter((t) => !filters.types.has(t.name) && t.name !== "Type");
   if (hiddenTypes.length)
     stateParts.push({
       label: hiddenTypes.length === 1 ? `${hiddenTypes[0].name} hidden` : `${hiddenTypes.length} types hidden`,
-      title: `Hidden: ${hiddenTypes.map((t) => t.name).join(", ")}. Click × to show them again.`,
+      title: `Hidden: ${hiddenTypes.map((t) => t.name).join(", ")}`,
       clear: () => setFilters((f) => ({ ...f, types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")) })),
     });
   const hiddenKinds = data.edgeKinds.filter((k) => !filters.kinds.has(k.kind) && defaultKinds(k.kind));
@@ -706,17 +706,17 @@ export default function App() {
   if (hiddenKinds.length)
     stateParts.push({
       label: hiddenKinds.length === 1 ? `${hiddenKinds[0].kind} links hidden` : `${hiddenKinds.length} link kinds hidden`,
-      title: `Hidden: ${hiddenKinds.map((k) => k.kind).join(", ")}. Click × to show them again.`,
+      title: `Hidden: ${hiddenKinds.map((k) => k.kind).join(", ")}`,
       clear: () => setFilters((f) => ({ ...f, kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => defaultKinds(k) || f.kinds.has(k))) })),
     });
-  if (shownBody) stateParts.push({ label: "body links shown", title: "Wikilinks in note bodies are drawn (hidden by default). Click × to hide them.", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
-  if (filters.collapseTypes.length) stateParts.push({ label: filters.collapseTypes.length === 1 ? `${filters.collapseTypes[0]} collapsed` : `${filters.collapseTypes.length} types collapsed`, title: `${filters.collapseTypes.join(", ")} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseTypes: [] })) });
-  if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
-  if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
-  if (filters.bridges) stateParts.push({ label: "other-vault notes shown", title: "Notes of other vaults that this vault's frontmatter paths point to are drawn as rectangles.", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
-  if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Wikilink targets that are no note are drawn as grey ghost nodes.", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
-  if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
-  if (filters.focusDepth) stateParts.push({ label: `depth ${filters.focusDepth} around selection`, title: "Only the selected note's neighbourhood is shown.", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });
+  if (shownBody) stateParts.push({ label: "body links shown", title: "Links written in note text, hidden by default", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
+  if (filters.collapseTypes.length) stateParts.push({ label: filters.collapseTypes.length === 1 ? `${filters.collapseTypes[0]} collapsed` : `${filters.collapseTypes.length} types collapsed`, title: `${filters.collapseTypes.join(", ")} notes are counted on their parent`, clear: () => setFilters((f) => ({ ...f, collapseTypes: [] })) });
+  if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Notes with few links are hidden", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
+  if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded", clear: () => setFilters((f) => ({ ...f, recency: false })) });
+  if (filters.bridges) stateParts.push({ label: "other-vault notes shown", title: "Notes from other vaults are shown as rectangles", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
+  if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Links to missing notes are shown as grey dots", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
+  if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are hidden by default", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
+  if (filters.focusDepth) stateParts.push({ label: `${filters.focusDepth} ${filters.focusDepth === 1 ? "link" : "links"} around selection`, title: "Only notes near the selection are shown", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });
   const kindsChanged = layoutKinds.current !== null && (layoutKinds.current.size !== filters.kinds.size || [...filters.kinds].some((k) => !layoutKinds.current!.has(k)));
   const selectedNode = selected ? byId.get(selected) : null;
   // A note of another vault, or a missing target: on the map but not in this vault's notes.
@@ -733,7 +733,7 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <label className="vault-picker" title={`${data.vault.path} · click to switch vault or manage the list`}>
+          <label className="vault-picker" title={data.vault.path}>
             <span className="vault-name">{data.vault.label}</span>
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
               <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -761,7 +761,8 @@ export default function App() {
         <div className="search">
           <input
             type="search"
-            placeholder="Search notes… (Enter focuses all matches)"
+            placeholder="Search notes"
+            title="Enter opens a single match, or focuses all matches"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -796,7 +797,7 @@ export default function App() {
           <button
             className="button"
             onClick={() => void recompute(false)}
-            title={layoutRun ? "Stop now and keep the current positions" : "Update the layout from the current positions (under a second, saves by itself). A full redo from scratch is in Settings → Layout → Reset layout."}
+            title={layoutRun ? "Stop and keep the current positions" : "Tidy the map from its current positions"}
           >
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Update layout"}
           </button>
@@ -808,7 +809,7 @@ export default function App() {
               setExportState("busy");
               setExportRequest((n) => n + 1);
             }}
-            title="Download the current view as a PNG at twice the screen resolution (background, regions, graph, names; the sidebar and panel are not included)"
+            title="Save the current view as a PNG image"
           >
             {exportState === "busy" ? "Exporting…" : exportState === "error" ? "Export failed" : "Export PNG"}
           </button>
@@ -827,7 +828,7 @@ export default function App() {
             else if (v === "__delete__") deleteView();
             else applyView(views.find((x) => x.name === v) ?? null);
           }}
-          title="Views: filters, focus and colour level saved by name for this vault, in this browser. Default: nothing focused, all types and relationship links shown, body links and archived notes hidden."
+          title="Saved views"
         >
           <option value="">Default view</option>
           {views.map((v) => (
@@ -849,10 +850,10 @@ export default function App() {
               </span>
             ))}
             {kindsChanged && (
-              <span className="state-chip stale" title="The visible link kinds changed since the last layout run; the positions still reflect the previous set.">
-                links changed since the last layout ·{" "}
+              <span className="state-chip stale" title="The layout was computed with other link kinds">
+                link kinds changed ·{" "}
                 <button className="link small" onClick={() => void recompute(false)}>
-                  recompute
+                  update layout
                 </button>
               </span>
             )}
@@ -934,12 +935,12 @@ export default function App() {
                   <span className="group-tag">
                     <span className="dot" style={{ background: mapColor(hoveredNode.id) }} />
                     {byId.get(groupId)?.title ?? groupId}
-                    {home?.lateral && <span title="No belongs_to: coloured by the first group it is related to"> (related)</span>}
+                    {home?.lateral && <span title="No parent: coloured by a related group"> (related)</span>}
                   </span>
                 ) : outside ? (
                   <span className="group-tag">
                     <span className="dot" style={{ background: OUTSIDE_COLOR }} />
-                    outside the hierarchy: {outside}
+                    no group ({outside})
                   </span>
                 ) : null;
               })()}

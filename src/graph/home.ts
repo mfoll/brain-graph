@@ -336,9 +336,9 @@ export function isUnassigned(note: NoteNode, index: HomeIndex): boolean {
 export function outsideReason(note: NoteNode, index: HomeIndex): string | null {
   if (index.hubs.has(note.id) || !index.homes.get(note.id)?.exempt) return null;
   if (note.archived) return "archived";
-  if (index.settings.lateralHomeTypes?.has(note.type ?? "") ?? note.type === "Person") return "no affiliation group";
+  if (index.settings.lateralHomeTypes?.has(note.type ?? "") ?? note.type === "Person") return "no affiliation";
   if (isInbox(note)) return "in the Inbox";
-  return `${note.type} notes`;
+  return note.type ?? "untyped";
 }
 
 export function homeColor(note: NoteNode, index: HomeIndex, level: HomeLevel): string {
