@@ -7,7 +7,7 @@ import chokidar from "chokidar";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { firstH1, buildGraph, slugify, type VaultGraph } from "./vault.ts";
+import { firstH1, buildGraph, slugify, type VaultGraph, firstParagraph, splitFrontmatter } from "./vault.ts";
 import type { Bridge, VaultInfo } from "../shared/types.ts";
 
 export interface VaultApiOptions {
@@ -18,8 +18,6 @@ export interface VaultApiOptions {
   label?: string;
   /** Tolaria vault slug used in tolaria://<slug>/<path> deep links. Defaults to a slugified label. */
   slug?: string;
-  /** Frontmatter keys whose values are paths into another registered vault (default archive_record, archive_records). */
-  bridgeKeys?: string[];
   /** Directory for the saved layout sidecars (one per vault slug). Defaults to ~/.config/brain-graph/layouts. */
   layoutDir?: string;
   /** Tolaria registry; defaults to the macOS location. */
@@ -198,46 +196,43 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
     });
     watchers.set(info.slug, watcher);
   };
-  // Cross-vault pointers: a path listed under a bridge key is looked up in every other registered vault
-  // (as <path>/record.md, <path>.md or <path>); the target's H1 becomes the bridge node's label.
-  const bridgeKeys = opts.bridgeKeys ?? ["archive_record", "archive_records"];
+  // Cross-vault links need no configuration: a frontmatter value that is a relative path, names no note
+  // of this vault, and names a note (or a folder's note) in exactly one other registered vault. A path
+  // found in several vaults is skipped, since a template vault mirrors this vault's own paths.
+  const FOLDER_NOTES = ["index.md", "README.md", "record.md"];
+  const candidates = (p: string) => (p.endsWith(".md") ? [p] : [`${p}.md`, ...FOLDER_NOTES.map((f) => `${p}/${f}`), `${p}/${path.posix.basename(p)}.md`]);
+  const firstHit = async (root: string, p: string) => {
+    for (const rel of candidates(p)) if (await fs.stat(path.join(root, rel)).then((st) => st.isFile(), () => false)) return rel;
+    return null;
+  };
   const resolveBridges = async (data: VaultGraph, all: VaultInfo[]): Promise<Bridge[]> => {
     const others = all.filter((v) => v.slug !== data.vault.slug);
-    const found = new Map<string, Promise<{ vault: string; path: string; title: string } | null>>();
-    const lookup = (raw: string) => {
-      const p = raw.trim().replace(/^\/+/, "").replace(/\/record\.md$/, "").replace(/\.md$/, "");
-      if (!p) return Promise.resolve(null);
-      let hit = found.get(p);
-      if (!hit) {
-        hit = (async () => {
-          for (const v of others) {
-            for (const rel of [`${p}/record.md`, `${p}.md`, p]) {
-              const file = path.join(v.path, rel);
-              const text = await fs.readFile(file, "utf8").catch(() => null);
-              if (text === null) continue;
-              const body = text.startsWith("---") ? text.split(/^---\s*$/m, 3)[2] ?? text : text;
-              return { vault: v.slug, path: rel, title: firstH1(body) ?? path.basename(p) };
-            }
-          }
-          return null;
-        })();
-        found.set(p, hit);
-      }
-      return hit;
-    };
-    const out: Bridge[] = [];
+    if (!others.length) return [];
+    const pointers = new Map<string, Set<string>>(); // path -> notes whose frontmatter names it
     for (const n of data.nodes) {
-      for (const key of bridgeKeys) {
-        const value = n.properties[key];
-        const raws = Array.isArray(value) ? value : value ? [value] : [];
-        for (const raw of raws) {
+      for (const value of Object.values(n.properties)) {
+        for (const raw of Array.isArray(value) ? value : [value]) {
           if (typeof raw !== "string") continue;
-          const t = await lookup(raw);
-          if (t) out.push({ from: n.id, ...t, kind: raw.trim().replace(/^\/+/, "").split("/")[0] || "record" });
+          const p = raw.trim().replace(/^\.?\/+/, "");
+          // Relative paths only: no URLs, home or absolute paths, parent hops or prose.
+          if (!p.includes("/") || p.length > 300 || /^[a-z][a-z0-9+.-]*:/i.test(p) || p.startsWith("~") || p.includes("..") || /\s{2}|\n/.test(p)) continue;
+          (pointers.get(p) ?? pointers.set(p, new Set()).get(p)!).add(n.id);
         }
       }
     }
-    return out;
+    const out: Bridge[] = [];
+    await Promise.all(
+      [...pointers].map(async ([p, from]) => {
+        if (await firstHit(data.vault.path, p)) return;
+        const hits = (await Promise.all(others.map(async (v) => ({ v, rel: await firstHit(v.path, p) })))).filter((h) => h.rel);
+        if (hits.length !== 1) return;
+        const { v, rel } = hits[0];
+        const { data: fm, body } = splitFrontmatter(await fs.readFile(path.join(v.path, rel!), "utf8"));
+        const target = { vault: v.slug, vaultLabel: v.label, path: rel!, title: firstH1(body) ?? path.posix.basename(p), type: typeof fm.type === "string" ? fm.type : null, summary: firstParagraph(body) };
+        for (const f of from) out.push({ from: f, ...target });
+      }),
+    );
+    return out.sort((a, b) => a.path.localeCompare(b.path) || a.from.localeCompare(b.from));
   };
   const graph = (info: VaultInfo) => {
     watch(info);

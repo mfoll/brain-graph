@@ -7,6 +7,8 @@ interface Props {
   data: VaultGraph;
   id: string;
   onNavigate: (id: string) => void;
+  /** Read a note of another registered vault: its wikilinks are shown as text, since its notes are not on this map. */
+  vault?: string;
 }
 
 interface NoteResponse {
@@ -25,7 +27,8 @@ function splitFrontmatter(md: string): { yaml: string | null; body: string } {
   return { yaml: md.slice(4, end).trim(), body: md.slice(end + 4).replace(/^\s*\n/, "") };
 }
 
-export function NoteReader({ data, id, onNavigate }: Props) {
+export function NoteReader({ data, id, onNavigate, vault: otherVault }: Props) {
+  const slug = otherVault ?? data.vault.slug;
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showYaml, setShowYaml] = useState(false);
@@ -34,14 +37,14 @@ export function NoteReader({ data, id, onNavigate }: Props) {
     let cancelled = false;
     setNote(null);
     setError(null);
-    fetch(`/api/note?vault=${encodeURIComponent(data.vault.slug)}&id=${encodeURIComponent(id)}`)
+    fetch(`/api/note?vault=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`)
       .then((r) => (r.ok ? (r.json() as Promise<NoteResponse>) : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((n) => !cancelled && setNote(n))
       .catch((e) => !cancelled && setError(String(e)));
     return () => {
       cancelled = true;
     };
-  }, [id, data.vault.slug]);
+  }, [id, slug]);
 
   // Resolve wikilinks the same way the parser does: exact id, else unique stem.
   const resolve = useMemo(() => {
@@ -64,14 +67,14 @@ export function NoteReader({ data, id, onNavigate }: Props) {
     const withLinks = withCallouts.replace(WIKILINK, (_m, inner: string) => {
       const [target, alias] = inner.split("|");
       const label = (alias ?? target.split("#")[0].split("/").pop() ?? target).trim();
-      const resolved = resolve(inner);
-      return resolved ? `<a href="#note:${encodeURIComponent(resolved)}" class="wikilink" data-note="${resolved}">${label}</a>` : `<span class="wikilink missing">${label}</span>`;
+      const resolved = otherVault ? null : resolve(inner);
+      return resolved ? `<a href="#note:${encodeURIComponent(resolved)}" class="wikilink" data-note="${resolved}">${label}</a>` : `<span class="wikilink${otherVault ? "" : " missing"}">${label}</span>`;
     });
     const rendered = marked.parse(withLinks, { async: false, gfm: true }) as string;
-    const vault = encodeURIComponent(data.vault.slug);
+    const vault = encodeURIComponent(slug);
     const rebased = rendered.replace(/src="(?!https?:|data:|\/)([^"]+)"/g, (_m, src: string) => `src="/vault-file/${src.split("/").map(encodeURIComponent).join("/")}?vault=${vault}"`);
     return DOMPurify.sanitize(rebased, { ADD_ATTR: ["data-note", "target"] });
-  }, [note, resolve, data.vault.slug]);
+  }, [note, resolve, slug, otherVault]);
 
   const yaml = note ? splitFrontmatter(note.markdown).yaml : null;
 

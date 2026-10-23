@@ -28,7 +28,7 @@ export interface Filters {
   spotlight: { kind: "type"; value: string } | { kind: "hub"; id: string } | { kind: "facet"; type: string; key: string; value: string } | { kind: "search"; query: string } | { kind: "unassigned" } | null;
   /** Show wikilink targets that resolve to no note, as grey ghost nodes. */
   ghosts: boolean;
-  /** Show the records of other vaults this vault points to (archive_records), as rectangles. */
+  /** Show the notes of other registered vaults that this vault's frontmatter paths point to, as rectangles. */
   bridges: boolean;
   /** Hide notes with fewer visible links than this (group notes are always kept). 0 = off. */
   minDegree: number;
@@ -594,9 +594,9 @@ export function Sidebar(p: Props) {
               Show missing link targets ({new Set(data.unresolved.map((u) => u.raw.split("|")[0].split("#")[0].trim())).size})
             </label>
             {(data.bridges?.length ?? 0) > 0 && (
-              <label className="row" title="Records of another vault (the Scientific Production Archive) listed by this vault's notes under archive_records or archive_record. Each record is a rectangle in the colour of the Project that lists it; click one to open it in Tolaria.">
+              <label className="row" title="A frontmatter value that is a path to a note of another vault you have registered (an archive record listed by a Project, for instance) is drawn as a rectangle beside the note that lists it. Hover one for its title; click it to read it in the panel.">
                 <input type="checkbox" checked={filters.bridges} onChange={(e) => onChange({ ...filters, bridges: e.target.checked })} />
-                Show archive records ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
+                Show notes from other vaults ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
               </label>
             )}
             <label className="row column" title="Fold the notes of one type into a +N count on the note they belong to. Useful for a type that is mostly leaves, such as sources or references; the list is ordered by how leaf-like each type is.">

@@ -19,7 +19,7 @@ async function walk(root: string, dir = root, out: string[] = []): Promise<strin
   return out;
 }
 
-function splitFrontmatter(text: string): { data: Record<string, unknown>; body: string } {
+export function splitFrontmatter(text: string): { data: Record<string, unknown>; body: string } {
   if (!text.startsWith("---")) return { data: {}, body: text };
   const end = text.indexOf("\n---", 3);
   if (end === -1) return { data: {}, body: text };
@@ -40,7 +40,7 @@ export function firstH1(body: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-function firstParagraph(body: string): string {
+export function firstParagraph(body: string): string {
   const lines = body.split("\n");
   let i = 0;
   // skip until after the H1

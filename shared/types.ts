@@ -51,16 +51,19 @@ export interface VaultGraph {
   bridges?: Bridge[];
 }
 
+/** A frontmatter path in this vault that names a note of another registered vault. */
 export interface Bridge {
   /** Pointing note in this vault. */
   from: string;
-  /** Slug of the vault that holds the target. */
+  /** Slug and label of the vault that holds the target. */
   vault: string;
+  vaultLabel: string;
   /** Target file, relative to that vault, with its .md extension (as a tolaria:// link wants it). */
   path: string;
   title: string;
-  /** First path segment (papers, grants…), used as the node's type label. */
-  kind: string;
+  /** The target's frontmatter `type`, when it has one. */
+  type: string | null;
+  summary: string;
 }
 
 export interface VaultInfo {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel, type PanelTab } from "./components/NotePanel";
+import { ExternalPanel } from "./components/ExternalPanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
@@ -399,7 +400,7 @@ export default function App() {
     if (!graph || !data) return null;
     const g = graph.copy();
     g.forEachEdge((e, a) => {
-      if (a.kind === "missing" ? !filters.ghosts : a.kind === "archive" ? !filters.bridges : !filters.kinds.has(a.kind)) g.dropEdge(e);
+      if (a.kind === "missing" ? !filters.ghosts : a.kind === "cross-vault" ? !filters.bridges : !filters.kinds.has(a.kind)) g.dropEdge(e);
     });
     return g;
   }, [graph, data, filters.kinds, filters.ghosts, filters.bridges]);
@@ -514,8 +515,12 @@ export default function App() {
       // Unassigned: notes that are not groups themselves and whose chain reaches no group.
       for (const n of data.nodes) if (n.type !== "Type" && !homeIndex.hubs.has(n.id) && !homeIndex.homes.get(n.id)?.hub && !homeIndex.homes.get(n.id)?.exempt && !hidden.has(n.id)) set.add(n.id);
     }
+    // Notes of other vaults and missing targets follow the notes that link to them.
+    filteredGraph?.forEachNode((n, a) => {
+      if ((a.bridge || a.ghost) && !hidden.has(n) && filteredGraph.someNeighbor(n, (m) => set.has(m))) set.add(n);
+    });
     return set;
-  }, [filters.spotlight, data, homeIndex, hidden]);
+  }, [filters.spotlight, data, homeIndex, hidden, filteredGraph]);
   // Candidates for collapsing: types with enough notes, biggest first, with the share of their notes
   // that are leaves in the current view (at most two visible links) as a hint.
   const leafTypes = useMemo(() => {
@@ -657,12 +662,6 @@ export default function App() {
   // Clicking the graph is a new intent: a node click shows that node's neighbourhood, a stage click clears everything.
   const clickGraph = (id: string | null) => {
     if (id && filteredGraph?.getNodeAttribute(id, "ghost")) return;
-    const bridge = id ? filteredGraph?.getNodeAttribute(id, "bridge") : undefined;
-    if (bridge) {
-      // A record of another vault has no note here: open it where it lives.
-      window.location.href = `tolaria://${bridge.vault}/${bridge.path.split("/").map(encodeURIComponent).join("/")}`;
-      return;
-    }
     setFilters((f) => (f.spotlight ? { ...f, spotlight: null } : f));
     select(id);
   };
@@ -713,18 +712,22 @@ export default function App() {
   if (filters.collapseType) stateParts.push({ label: `${filters.collapseType} collapsed`, title: `${filters.collapseType} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseType: null })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
-  if (filters.bridges) stateParts.push({ label: "archive records shown", title: "Records of another vault listed under archive_records are drawn as rectangles.", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
+  if (filters.bridges) stateParts.push({ label: "other-vault notes shown", title: "Notes of other vaults that this vault's frontmatter paths point to are drawn as rectangles.", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
   if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Wikilink targets that are no note are drawn as grey ghost nodes.", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are visible (hidden by default).", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
   if (filters.focusDepth) stateParts.push({ label: `depth ${filters.focusDepth} around selection`, title: "Only the selected note's neighbourhood is shown.", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });
   const kindsChanged = layoutKinds.current !== null && (layoutKinds.current.size !== filters.kinds.size || [...filters.kinds].some((k) => !layoutKinds.current!.has(k)));
   const selectedNode = selected ? byId.get(selected) : null;
+  // A note of another vault, or a missing target: on the map but not in this vault's notes.
+  const satellite = (id: string | null) => (id && !byId.has(id) && filteredGraph.hasNode(id) ? filteredGraph.getNodeAttributes(id) : null);
+  const selectedBridge = satellite(selected)?.bridge ? satellite(selected) : null;
+  const hoveredSat = satellite(hovered);
   const visibleCount = data.nodes.reduce((n, note) => n + (hidden.has(note.id) ? 0 : 1), 0);
   const run = layoutRun ? LAYOUT_RUNS[layoutRun] : LAYOUT_RUNS.recompute;
 
   return (
     <div
-      className={`app${sidebar.dragging || panel.dragging ? " resizing" : ""}${selectedNode ? " with-panel" : ""}`}
+      className={`app${sidebar.dragging || panel.dragging ? " resizing" : ""}${selectedNode || selectedBridge ? " with-panel" : ""}`}
       style={{ "--sidebar-w": `${sidebar.width}px`, "--panel-w": `${panelWidthShown}px` } as React.CSSProperties}
     >
       <header className="topbar">
@@ -933,6 +936,19 @@ export default function App() {
             {hoveredNode.summary && <p>{hoveredNode.summary}</p>}
           </div>
         )}
+        {hoveredSat && pointer && (
+          <div className="tooltip" style={{ left: pointer.x + 14, top: pointer.y + 14 }}>
+            <div className="tip-head">
+              <span className="type-tag">{hoveredSat.bridge ? `▬ ${hoveredSat.bridge.type ?? "note"}` : "missing link target"}</span>
+              {hoveredSat.bridge && <span className="group-tag">{hoveredSat.bridge.vaultLabel}</span>}
+            </div>
+            <strong>{hoveredSat.label}</strong>
+            <div className="muted small">
+              {hoveredSat.bridge ? "linked from" : "mentioned by"} {hoveredSat.degree} {hoveredSat.degree === 1 ? "note" : "notes"} here{hoveredSat.bridge ? " · click to read" : ""}
+            </div>
+            {hoveredSat.bridge?.summary && <p>{hoveredSat.bridge.summary}</p>}
+          </div>
+        )}
       </main>
 
       {manageVaults && registry && (
@@ -949,7 +965,22 @@ export default function App() {
           onClose={() => setManageVaults(false)}
         />
       )}
-      {selectedNode && <div className={`gutter gutter-right${panel.dragging ? " active" : ""}`} onMouseDown={panel.startDrag} title="Drag to resize the panel" />}
+      {(selectedNode || selectedBridge) && <div className={`gutter gutter-right${panel.dragging ? " active" : ""}`} onMouseDown={panel.startDrag} title="Drag to resize the panel" />}
+      {selectedBridge?.bridge && selected && (
+        <ExternalPanel
+          data={data}
+          graph={filteredGraph}
+          id={selected}
+          title={selectedBridge.label}
+          bridge={selectedBridge.bridge}
+          onSelect={(id) => select(id, true)}
+          onClose={() => setSelected(null)}
+          canBack={history.current.past.length > 0}
+          canForward={history.current.future.length > 0}
+          onBack={goBack}
+          onForward={goForward}
+        />
+      )}
       {selectedNode && (
         <NotePanel
           data={data}

@@ -22,8 +22,8 @@ export interface NodeAttrs {
   folder: string;
   /** Target of a wikilink that resolves to no note (shown behind Filters → missing targets). */
   ghost?: boolean;
-  /** A note of another vault this vault points to (Filters → archive records); `via` is the first pointing note. */
-  bridge?: { vault: string; path: string; via: string };
+  /** A note of another vault this vault links to (Filters → notes from other vaults); `via` is the first linking note. */
+  bridge?: { vault: string; vaultLabel: string; path: string; via: string; type: string | null; summary: string };
   [key: string]: unknown;
 }
 export interface EdgeAttrs {
@@ -205,9 +205,9 @@ export function placeStranded(graph: BrainGraph, also: string[] = []): string[] 
 }
 
 /**
- * Ghost (missing target) and bridge (archive record) nodes are decorations, not physics: they take no
+ * Ghost (missing target) and bridge (note of another vault) nodes are decorations, not physics: they take no
  * part in layout runs and sit in a small sunflower around the note that points at them (a bridge's first
- * listing Project, a ghost's first mentioning note). Left to the physics they drifted to the map's rim
+ * linking note, a ghost's first mentioning note). Left to the physics they drifted to the map's rim
  * while hidden, since their links are dropped when their toggle is off. Positions are in map units.
  */
 export function placeSatellites(graph: BrainGraph): void {
@@ -270,14 +270,14 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       graph.updateNodeAttribute(id, "degree", (d) => (d as number) + 1);
     }
   }
-  // Cross-vault bridges: one rectangle per target record, linked by an "archive" edge from each pointing note.
+  // Notes of other vaults: one rectangle per target, linked by a "cross-vault" edge from each linking note.
   for (const b of data.bridges ?? []) {
     if (!graph.hasNode(b.from)) continue;
     const id = `bridge:${b.vault}/${b.path}`;
-    if (!graph.hasNode(id)) graph.addNode(id, { label: b.title, type: `(${b.kind})`, color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "rectangle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", bridge: { vault: b.vault, path: b.path, via: b.from } });
-    const key = `${b.from}|archive|${id}`;
+    if (!graph.hasNode(id)) graph.addNode(id, { label: b.title, type: b.type ?? "note", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "rectangle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", bridge: { vault: b.vault, vaultLabel: b.vaultLabel, path: b.path, via: b.from, type: b.type, summary: b.summary } });
+    const key = `${b.from}|cross-vault|${id}`;
     if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, b.from, id, { kind: "archive", weight: edgeWeight("archive"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });
+      graph.addEdgeWithKey(key, b.from, id, { kind: "cross-vault", weight: edgeWeight("cross-vault"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });
       graph.updateNodeAttribute(id, "degree", (d) => (d as number) + 1);
     }
   }
