@@ -84,7 +84,7 @@ The defaults follow Tolaria and the Second Brain template; each is a per-vault s
 | Deep links | `tolaria://<slug>/<path>.md`, slug from the vault label | `VAULT_SLUG` |
 | Links to other vaults | a frontmatter value that is a relative path to a note (or folder note) of exactly one other registered vault and of no note here | detected, nothing to set |
 
-The `has` fallback exists because vaults use `has` for selective entry points rather than ownership: in the vault pictured above, 299 notes would have been homed through `has` alone before `belongs_to` was given priority. The root, exempt and Person rules follow the template's hierarchy contract (its ADR on `belongs_to` roots), so the viewer and the template's [hierarchy audit](https://github.com/mfoll/second-brain-template) agree on homes; the `graph:homes` command below prints what the viewer infers, from the same code.
+The `has` fallback exists because vaults often use `has` for selective entry points rather than ownership, so following it first would pull notes into the wrong group. The root, exempt and Person rules follow the template's hierarchy contract (its ADR on `belongs_to` roots), so the viewer and the template's [hierarchy audit](https://github.com/mfoll/second-brain-template) agree on homes; the `graph:homes` command below prints what the viewer infers, from the same code.
 
 ## Development
 

@@ -544,6 +544,13 @@ export function Sidebar(p: Props) {
 
           <Section id="appearance" title="Appearance" open={!collapsed.has("appearance")} onToggle={toggleSection}>
             <div className="muted small hint">How the graph is drawn; nothing here moves or hides a note.</div>
+            <div className="subhead">Colour</div>
+            <label className="row column" title="Which level of the hierarchy forms the coloured groups: top-level groups, their direct sub-groups, or every note's nearest group. Regions and group names follow the same level.">
+              <span>
+                Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
+              </span>
+              <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
+            </label>
             <div className="row column" title="Colours of the groups, biggest group first; sub-groups take shades of their parent's hue. Regions and names follow.">
               <span>Palette</span>
               <div className="palette-grid">
@@ -562,12 +569,28 @@ export function Sidebar(p: Props) {
                 })}
               </div>
             </div>
-            <label className="row column" title="How far up the hierarchy a note takes its colour from.">
-              <span>
-                Colour by: <strong>{LEVEL_LABELS[homeLevel]}</strong>
-              </span>
-              <input type="range" min={0} max={2} value={homeLevel} onChange={(e) => p.onHomeLevel(Number(e.target.value) as HomeLevel)} />
+            <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
+              <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
+              Fade notes not edited recently
             </label>
+            <div className="subhead">Regions and names</div>
+            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
+              <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
+              Group regions
+            </label>
+            {filters.hulls && (
+              <label className="row column indent" title="How far a region extends around its notes and along the links inside the group.">
+                <span>
+                  Region size: <strong>{filters.regionSize}×</strong>
+                </span>
+                <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
+              </label>
+            )}
+            <label className="row" title="One name per coloured region, so the colour level decides which groups are named: top-level groups, their direct sub-groups, or every note's nearest group. A focused group is always named. A name needs at least four visible notes, sits at their median, and is placed largest group first; a smaller name that finds no free spot on its own region is left out until you zoom in. Names fade while something is hovered or focused.">
+              <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
+              Group names
+            </label>
+            <div className="subhead">Notes and links</div>
             <label className="row column" title="Multiplies every node's size.">
               <span>
                 Node size: <strong>{ls.nodeScale}×</strong>
@@ -586,40 +609,22 @@ export function Sidebar(p: Props) {
               </span>
               <input type="range" min={0.5} max={2.5} step={0.1} value={filters.linkWidth} onChange={(e) => onChange({ ...filters, linkWidth: Number(e.target.value) })} />
             </label>
+            <div className="subhead">Labels</div>
             <label className="row column" title="Labels appear as you zoom in, once a note is drawn at least this many pixels wide. Lower the threshold to see more labels at the same zoom.">
               <span>
                 Labels appear from <strong>{filters.labelThreshold} px</strong> node size
               </span>
               <input type="range" min={2} max={14} step={1} value={filters.labelThreshold} onChange={(e) => onChange({ ...filters, labelThreshold: Number(e.target.value) })} />
             </label>
-            <label className="row" title="A region is a disc around each visible note of the group plus strokes along the group's hierarchy links. Regions fade while something is hovered or focused.">
-              <input type="checkbox" checked={filters.hulls} onChange={(e) => onChange({ ...filters, hulls: e.target.checked })} />
-              Group regions
-            </label>
-            {filters.hulls && (
-              <label className="row column indent" title="How far a region extends around its notes and along the links inside the group.">
-                <span>
-                  Region size: <strong>{filters.regionSize}×</strong>
-                </span>
-                <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
-              </label>
-            )}
-            <label className="row" title="One name per coloured region, so the colour level decides which groups are named: top-level groups, their direct sub-groups, or every note's nearest group. A focused group is always named. A name needs at least four visible notes, sits at their median, and is placed largest group first; a smaller name that finds no free spot on its own region is left out until you zoom in. Names fade while something is hovered or focused.">
-              <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
-              Group names
-            </label>
             <label className="row" title="Labels are otherwise shown only for hovered, selected or focused notes.">
               <input type="checkbox" checked={filters.labels} onChange={(e) => onChange({ ...filters, labels: e.target.checked })} />
               All note labels
-            </label>
-            <label className="row" title="Full colour: edited in the last 7 days. Faded: 30 days. Ghost: older than 90 days.">
-              <input type="checkbox" checked={filters.recency} onChange={(e) => onChange({ ...filters, recency: e.target.checked })} />
-              Fade notes not edited recently
             </label>
           </Section>
 
           <Section id="filter" title="Filters" open={!collapsed.has("filter")} onToggle={toggleSection}>
             <div className="muted small hint">What is shown at all. Each active filter appears as a chip under the header, with its own undo.</div>
+            <div className="subhead">Hide</div>
             <label className="row">
               <input type="checkbox" checked={filters.hideArchived} onChange={(e) => onChange({ ...filters, hideArchived: e.target.checked })} />
               Hide archived notes
@@ -628,16 +633,12 @@ export function Sidebar(p: Props) {
               <input type="checkbox" checked={filters.hideOrphans} onChange={(e) => onChange({ ...filters, hideOrphans: e.target.checked })} />
               Hide orphans (no visible links)
             </label>
-            <label className="row" title="Wikilinks whose target is no note in the vault (a typo, a renamed note, a template placeholder). Each distinct target is a grey ghost node linked from the notes that mention it; hover it to see them.">
-              <input type="checkbox" checked={filters.ghosts} onChange={(e) => onChange({ ...filters, ghosts: e.target.checked })} />
-              Show missing link targets ({new Set(data.unresolved.map((u) => u.raw.split("|")[0].split("#")[0].trim())).size})
+            <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
+              <span>
+                Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
+              </span>
+              <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
             </label>
-            {(data.bridges?.length ?? 0) > 0 && (
-              <label className="row" title="A frontmatter value that is a path to a note of another vault you have registered (an archive record listed by a Project, for instance) is drawn as a rectangle beside the note that lists it. Hover one for its title; click it to read it in the panel.">
-                <input type="checkbox" checked={filters.bridges} onChange={(e) => onChange({ ...filters, bridges: e.target.checked })} />
-                Show notes from other vaults ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
-              </label>
-            )}
             <div className="row column" title="Fold the notes of these types into a +N count on the note they belong to. Useful for types that are mostly leaves, such as sources or references; types are ordered by how leaf-like they are.">
               <span>Collapse leaf types into their parent</span>
               <div className="chips">
@@ -656,12 +657,6 @@ export function Sidebar(p: Props) {
                 })}
               </div>
             </div>
-            <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
-              <span>
-                Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
-              </span>
-              <input type="range" min={0} max={5} value={filters.minDegree} onChange={(e) => onChange({ ...filters, minDegree: Number(e.target.value) })} />
-            </label>
             <label className="row column">
               <span>
                 Focus depth around selection: <strong>{filters.focusDepth === 0 ? "off" : filters.focusDepth}</strong>
@@ -669,6 +664,17 @@ export function Sidebar(p: Props) {
               </span>
               <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
             </label>
+            <div className="subhead">Also show</div>
+            <label className="row" title="Wikilinks whose target is no note in the vault (a typo, a renamed note, a template placeholder). Each distinct target is a grey ghost node linked from the notes that mention it; hover it to see them.">
+              <input type="checkbox" checked={filters.ghosts} onChange={(e) => onChange({ ...filters, ghosts: e.target.checked })} />
+              Show missing link targets ({new Set(data.unresolved.map((u) => u.raw.split("|")[0].split("#")[0].trim())).size})
+            </label>
+            {(data.bridges?.length ?? 0) > 0 && (
+              <label className="row" title="A frontmatter value that is a path to a note of another vault you have registered (an archive record listed by a Project, for instance) is drawn as a rectangle beside the note that lists it. Hover one for its title; click it to read it in the panel.">
+                <input type="checkbox" checked={filters.bridges} onChange={(e) => onChange({ ...filters, bridges: e.target.checked })} />
+                Show notes from other vaults ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
+              </label>
+            )}
             <div className="muted small hint">To hide one type or link kind: Explore → Types (hover a row, "hide") or Explore → Links.</div>
           </Section>
         </>

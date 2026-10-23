@@ -733,19 +733,25 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <select
-            className="vault-select"
-            value={data.vault.slug}
-            onChange={(e) => (e.target.value === "__manage__" ? setManageVaults(true) : setVaultSlug(e.target.value))}
-            title={`${data.vault.path} · choose a vault or manage the list`}
-          >
-            {(vaults ?? []).map((v) => (
-              <option key={v.slug} value={v.slug}>
-                {v.label}
-              </option>
-            ))}
-            <option value="__manage__">Manage vaults…</option>
-          </select>
+          <label className="vault-picker" title={`${data.vault.path} · click to switch vault or manage the list`}>
+            <span className="vault-name">{data.vault.label}</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <select
+              className="vault-select"
+              aria-label="Vault"
+              value={data.vault.slug}
+              onChange={(e) => (e.target.value === "__manage__" ? setManageVaults(true) : setVaultSlug(e.target.value))}
+            >
+              {(vaults ?? []).map((v) => (
+                <option key={v.slug} value={v.slug}>
+                  {v.label}
+                </option>
+              ))}
+              <option value="__manage__">Manage vaults…</option>
+            </select>
+          </label>
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
             {saved.layout && !layoutRun && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
