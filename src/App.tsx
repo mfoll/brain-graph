@@ -84,7 +84,7 @@ function usePanelWidth(key: string, initial: number, side: "left" | "right", min
 const VAULT_KEY = "brain-graph.vault";
 
 /** The view as remembered per vault: every filter except hidden sets, which are stored by name so new types and kinds stay visible. */
-type RememberedView = Partial<Omit<Filters, "types" | "kinds" | "spotlight">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseSources?: boolean };
+type RememberedView = Partial<Omit<Filters, "types" | "kinds" | "spotlight">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseType?: string | null; collapseSources?: boolean };
 function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters {
   const hiddenTypes = new Set(v.hiddenTypes ?? ["Type"]);
   const hiddenKinds = new Set(v.hiddenKinds ?? ["body"]);
@@ -93,7 +93,8 @@ function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters
     hideArchived: v.hideArchived ?? true,
     hideOrphans: v.hideOrphans ?? false,
     focusDepth: 0,
-    collapseType: v.collapseType ?? (v.collapseSources ? "Source" : null),
+    // Older views stored one type (collapseType) or a Source flag.
+    collapseTypes: v.collapseTypes ?? (v.collapseType ? [v.collapseType] : v.collapseSources ? ["Source"] : []),
     recency: v.recency ?? false,
     hulls: v.hulls ?? true,
     names: v.names ?? true,
@@ -261,7 +262,7 @@ export default function App() {
     hideArchived: true,
     hideOrphans: false,
     focusDepth: 0,
-    collapseType: null,
+    collapseTypes: [],
     recency: false,
     hulls: true,
     names: true,
@@ -425,10 +426,10 @@ export default function App() {
   useEffect(() => {
     if (!filteredGraph || !graph) return;
     const sourceCount = new Map<string, number>();
-    if (filters.collapseType) {
-      const ct = filters.collapseType;
+    if (filters.collapseTypes.length) {
+      const ct = new Set(filters.collapseTypes);
       graph.forEachEdge((_e, a, s, t) => {
-        if (a.kind === "belongs_to" && graph.getNodeAttribute(s, "type") === ct) sourceCount.set(t, (sourceCount.get(t) ?? 0) + 1);
+        if (a.kind === "belongs_to" && ct.has(graph.getNodeAttribute(s, "type"))) sourceCount.set(t, (sourceCount.get(t) ?? 0) + 1);
       });
     }
     const now = Date.now();
@@ -446,7 +447,7 @@ export default function App() {
       },
       { attributes: ["label", "recency"] },
     );
-  }, [filteredGraph, graph, byId, filters.collapseType, filters.recency]);
+  }, [filteredGraph, graph, byId, filters.collapseTypes, filters.recency]);
 
   const hidden = useMemo(() => {
     const set = new Set<string>();
@@ -454,7 +455,7 @@ export default function App() {
     for (const n of data.nodes) {
       const t = n.type ?? "(untyped)";
       if (!filters.types.has(t)) set.add(n.id);
-      else if (filters.collapseType && t === filters.collapseType) set.add(n.id);
+      else if (filters.collapseTypes.includes(t)) set.add(n.id);
       else if (filters.hideArchived && n.archived) set.add(n.id);
     }
     if (!filters.ghosts) filteredGraph.forEachNode((n, a) => void (a.ghost && set.add(n)));
@@ -709,7 +710,7 @@ export default function App() {
       clear: () => setFilters((f) => ({ ...f, kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => defaultKinds(k) || f.kinds.has(k))) })),
     });
   if (shownBody) stateParts.push({ label: "body links shown", title: "Wikilinks in note bodies are drawn (hidden by default). Click × to hide them.", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
-  if (filters.collapseType) stateParts.push({ label: `${filters.collapseType} collapsed`, title: `${filters.collapseType} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseType: null })) });
+  if (filters.collapseTypes.length) stateParts.push({ label: filters.collapseTypes.length === 1 ? `${filters.collapseTypes[0]} collapsed` : `${filters.collapseTypes.length} types collapsed`, title: `${filters.collapseTypes.join(", ")} notes are folded into a +N count on their parent.`, clear: () => setFilters((f) => ({ ...f, collapseTypes: [] })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Skeleton view.", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded.", clear: () => setFilters((f) => ({ ...f, recency: false })) });
   if (filters.bridges) stateParts.push({ label: "other-vault notes shown", title: "Notes of other vaults that this vault's frontmatter paths point to are drawn as rectangles.", clear: () => setFilters((f) => ({ ...f, bridges: false })) });

@@ -15,7 +15,7 @@ export interface Filters {
   hideOrphans: boolean;
   focusDepth: number; // 0 = whole graph
   /** Hide the notes of this type and show their count on the parent note's label (null = off). */
-  collapseType: string | null;
+  collapseTypes: string[];
   /** Fade notes by time since last edit. */
   recency: boolean;
   /** Tinted region behind each home group. */
@@ -599,17 +599,24 @@ export function Sidebar(p: Props) {
                 Show notes from other vaults ({new Set(data.bridges!.map((b) => `${b.vault}/${b.path}`)).size})
               </label>
             )}
-            <label className="row column" title="Fold the notes of one type into a +N count on the note they belong to. Useful for a type that is mostly leaves, such as sources or references; the list is ordered by how leaf-like each type is.">
-              <span>Collapse a leaf type into its parent</span>
-              <select className="facet-select wide" value={filters.collapseType ?? ""} onChange={(e) => onChange({ ...filters, collapseType: e.target.value || null })}>
-                <option value="">— none —</option>
-                {leafTypes.map((t) => (
-                  <option key={t.type} value={t.type}>
-                    {t.type} · {t.count} notes · {Math.round(t.leafShare * 100)}% leaves
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="row column" title="Fold the notes of these types into a +N count on the note they belong to. Useful for types that are mostly leaves, such as sources or references; types are ordered by how leaf-like they are.">
+              <span>Collapse leaf types into their parent</span>
+              <div className="chips">
+                {leafTypes.map((t) => {
+                  const on = filters.collapseTypes.includes(t.type);
+                  return (
+                    <button
+                      key={t.type}
+                      className={`chip${on ? " on" : ""}`}
+                      title={`${t.count} notes, ${Math.round(t.leafShare * 100)}% of them leaves`}
+                      onClick={() => onChange({ ...filters, collapseTypes: on ? filters.collapseTypes.filter((x) => x !== t.type) : [...filters.collapseTypes, t.type] })}
+                    >
+                      {t.type} <span className="count">{Math.round(t.leafShare * 100)}%</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="row column" title="Skeleton view: leaves and weakly connected notes disappear; group notes always stay.">
               <span>
                 Hide notes with fewer than <strong>{filters.minDegree === 0 ? "— (off)" : filters.minDegree}</strong> visible links
