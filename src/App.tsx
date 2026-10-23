@@ -228,10 +228,10 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`brain-graph.grouping.${data.vault.slug}`);
       if (raw) {
-        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string; roles?: Record<string, string> };
+        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string; roles?: Record<string, string>; exemptTypes?: string[] };
         const roles: Record<string, LinkRole> = {};
         for (const [k, r] of Object.entries(v.roles ?? {})) if (r === "up" || r === "down" || r === "lateral") roles[k] = r;
-        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE, roles };
+        if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE, roles, exemptTypes: Array.isArray(v.exemptTypes) ? new Set(v.exemptTypes) : undefined };
       }
     } catch {
       /* ignore */
@@ -242,7 +242,7 @@ export default function App() {
   const setHomeSettings = (next: HomeSettings) => {
     setHomeSettingsState(next);
     try {
-      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE, roles: next.roles ?? {} }));
+      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE, roles: next.roles ?? {}, exemptTypes: next.exemptTypes ? [...next.exemptTypes] : undefined }));
     } catch {
       /* ignore */
     }

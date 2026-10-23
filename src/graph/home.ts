@@ -23,7 +23,7 @@ export interface HomeSettings {
   lateralHomeTypes?: Set<string>;
 }
 
-/** Outside the hierarchy by convention (Second Brain template, ADR 0028): plus every type whose definition note carries `hierarchy_exempt: true`. */
+/** Outside the hierarchy by convention (the Second Brain template's hierarchy contract): plus every type whose definition note carries `hierarchy_exempt: true`. */
 export const EXEMPT_TYPES = ["Recap", "Guide", "Type", "Operation"];
 export function defaultExemptTypes(data: VaultGraph): Set<string> {
   const set = new Set(EXEMPT_TYPES);
@@ -31,7 +31,7 @@ export function defaultExemptTypes(data: VaultGraph): Set<string> {
   return set;
 }
 
-/** A note the vault deliberately lets root an area (ADR 0028: a Topic with `hierarchy_root: true`). */
+/** A note the vault deliberately lets root an area (the template's `hierarchy_root: true`, used on Topics). */
 export const isFlaggedRoot = (n: NoteNode | undefined) => n?.properties.hierarchy_root === true;
 /** A note allowed two parents at the same distance: its alternatives are not ambiguity. */
 export const acceptsDoubleParent = (n: NoteNode | undefined) => n?.properties.accepted_double_parent === true;
@@ -218,7 +218,7 @@ function computeHomes(data: VaultGraph, settings: HomeSettings): Map<string, Not
     }
     let h = walk(n.id, strong) ?? (settings.useHas ? walk(n.id, both) : null);
     // A parentless Person is coloured by the first hub it relates to (an external contact's project);
-    // with none, it is an external contact without an affiliation hub, parentless on purpose (ADR 0028).
+    // with none, it is an external contact without an affiliation hub, parentless on purpose (the template's hierarchy contract).
     const lateralType = lateralTypes.has(n.type ?? "");
     if (!h && lateralType) {
       const p = (lateral.get(n.id) ?? []).find((x) => isHub(x.id));

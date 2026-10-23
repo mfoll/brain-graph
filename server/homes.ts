@@ -25,7 +25,7 @@ if (asJson) {
   console.log(`# Home hierarchy (hub types: ${[...hubTypes].join(", ")}; has as parent: ${useHas}; Responsibilities and hierarchy_root Topics are roots; Recaps, Guides, Operations, hierarchy_exempt types, archived and Inbox notes are outside)\n`);
   for (const r of index.roots) print(r, 0);
 
-  // The four lists match the warnings of the vault's hierarchy_audit.py (project-parent, multi-parent, has-only,
+  // The four lists match the warnings of the Second Brain template's hierarchy audit (project-parent, multi-parent, has-only,
   // homeless), and the closing lists its info lines for the same exceptions; both end with a SUMMARY to diff.
   const counts: Record<string, number> = { "project-parent": 0, "multi-parent": 0, "has-only": 0, homeless: 0 };
   const info: string[] = [];
@@ -34,7 +34,7 @@ if (asJson) {
     console.log(line);
   };
 
-  console.log("\n# Active Projects with no parent, or whose parent is a Topic without hierarchy_root: true (ADR 0028: Topics are lateral context)");
+  console.log("\n# Active Projects with no parent, or whose parent is a Topic without hierarchy_root: true (in the Second Brain template, Topics are lateral context)");
   for (const h of hubs.values()) {
     const n = byId.get(h.id)!;
     if (h.type !== "Project" || n.archived) continue;

@@ -10,7 +10,6 @@ export interface NodeAttrs {
   color: string;
   typeColor: string;
   shape: string;
-  home: string | null;
   /** 1 = edited recently … 0.15 = untouched for months; drives opacity when the recency toggle is on. */
   recency: number;
   size: number;
@@ -256,7 +255,6 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
       color: typeColor,
       typeColor,
       shape: "circle",
-      home: n.home,
       recency: 1,
       size: nodeSize(degree),
       degree,
@@ -278,7 +276,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
     const target = u.raw.split("|")[0].split("#")[0].trim().replace(/\.md$/, "");
     if (!target || !graph.hasNode(u.from)) continue;
     const id = `missing:${target}`;
-    if (!graph.hasNode(id)) graph.addNode(id, { label: target, type: "(missing)", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "circle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", ghost: true });
+    if (!graph.hasNode(id)) graph.addNode(id, { label: target, type: "(missing)", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "circle", recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", ghost: true });
     const key = `${u.from}|missing|${id}`;
     if (!graph.hasEdge(key)) {
       graph.addEdgeWithKey(key, u.from, id, { kind: "missing", weight: edgeWeight("missing"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });
@@ -289,7 +287,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   for (const b of data.bridges ?? []) {
     if (!graph.hasNode(b.from)) continue;
     const id = `bridge:${b.vault}/${b.path}`;
-    if (!graph.hasNode(id)) graph.addNode(id, { label: b.title, type: b.type ?? "note", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "rectangle", home: null, recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", bridge: { vault: b.vault, vaultLabel: b.vaultLabel, path: b.path, via: b.from, type: b.type, summary: b.summary } });
+    if (!graph.hasNode(id)) graph.addNode(id, { label: b.title, type: b.type ?? "note", color: GHOST_COLOR, typeColor: GHOST_COLOR, shape: "rectangle", recency: 1, size: nodeSize(1), degree: 0, x: 0, y: 0, archived: false, status: null, folder: "", bridge: { vault: b.vault, vaultLabel: b.vaultLabel, path: b.path, via: b.from, type: b.type, summary: b.summary } });
     const key = `${b.from}|cross-vault|${id}`;
     if (!graph.hasEdge(key)) {
       graph.addEdgeWithKey(key, b.from, id, { kind: "cross-vault", weight: edgeWeight("cross-vault"), emphasis: lateralEmphasis(DEFAULT_LAYOUT.ratio) });

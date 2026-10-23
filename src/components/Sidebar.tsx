@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NoteNode, TypeInfo, VaultGraph } from "../types";
 import { edgeStyle } from "../graph/colors";
-import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, defaultLinkRole, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type LinkRole, type PaletteId } from "../graph/home";
+import { DEFAULT_PALETTE, OUTSIDE_COLOR, defaultExemptTypes, PALETTES, SHAPE_GLYPH, defaultLinkRole, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings, type Hub, type LinkRole, type PaletteId } from "../graph/home";
 
 const ROLE_LABEL: Record<LinkRole, string> = { up: "→ parent", down: "→ children", lateral: "lateral" };
 const ROLE_GLYPH: Record<LinkRole, string> = { up: "↑", down: "↓", lateral: "↔" };
@@ -460,6 +460,32 @@ export function Sidebar(p: Props) {
                     {t.name}
                   </button>
                 ))}
+            </div>
+            <div className="row column" title="Notes of these types sit outside the hierarchy: no group, not counted as unassigned, drawn in a pale neutral and listed under Outside the hierarchy. Archived notes, Inbox notes and parentless people with no related group are outside too. Defaults follow the Second Brain template, plus any type whose Type note has hierarchy_exempt: true.">
+              <span>Outside the hierarchy</span>
+              <div className="chips">
+                {types
+                  .filter((t) => t.name !== "Type" && t.name !== "(untyped)" && !homeSettings.hubTypes.has(t.name))
+                  .map((t) => {
+                    const exempt = homeSettings.exemptTypes ?? defaultExemptTypes(data);
+                    const on = exempt.has(t.name);
+                    return (
+                      <button
+                        key={t.name}
+                        className={`chip${on ? " on" : ""}`}
+                        title={on ? "Outside the hierarchy. Click to give these notes a group again." : "Click to keep these notes outside the hierarchy"}
+                        onClick={() => {
+                          const next = new Set(exempt);
+                          if (on) next.delete(t.name);
+                          else next.add(t.name);
+                          p.onHomeSettings({ ...homeSettings, exemptTypes: next });
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
             <div className="row column" title="What each relationship kind means for the hierarchy. Click a chip to cycle: lateral (context only) → points to the parent (like belongs_to) → points to children (like has). Defaults follow Tolaria's conventions.">
               <span>Link roles</span>

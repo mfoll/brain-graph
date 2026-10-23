@@ -32,7 +32,7 @@ It is a standalone companion, not a Tolaria extension: it reads the vault folder
 
 **Layout.** ForceAtlas2, stepped a few iterations per animation frame and cooled so nodes come to rest within the run. Positions are saved per vault when a run stops, so the map is stable between sessions; a new note is placed beside the note it is most strongly linked to (its parent, usually) and settles there while the rest stays put. A note left far from all its links, for instance created before it had any, is brought back the same way on the next load or **Update layout**. **Update layout** nudges the current map for under a second; **Reset layout** redoes it from scratch in a few seconds and keeps a backup of the previous map. Nodes are not draggable: hand placement would not survive the next run.
 
-**Sharing.** **Export PNG** saves the current view at twice the screen resolution. The URL carries the vault, note, focus and roll-up level (`?vault=…&note=…&focus=hub:genesis&level=0`, or `focus=search:budget` for a search), so a note in Tolaria or an agent report can link straight into a view. Everything else you toggle is remembered per vault in the browser.
+**Sharing.** **Export PNG** saves the current view at twice the screen resolution. The URL carries the vault, note, focus and roll-up level (`?vault=…&note=…&focus=hub:my-project&level=0`, or `focus=search:budget` for a search), so a note in Tolaria or an agent report can link straight into a view. Everything else you toggle is remembered per vault in the browser.
 
 **Live.** The server watches the vault and the map rebuilds when a note changes.
 
@@ -77,7 +77,7 @@ The defaults follow Tolaria and the Second Brain template; each is a per-vault s
 | Root types, whose link to another type is context rather than a parent, except a link to a flagged root | Responsibility | `rootTypes` in the home settings (no UI yet) |
 | Topics allowed to root an area | `hierarchy_root: true` on the Topic | the vault's frontmatter |
 | Two parents at the same distance accepted, not reported | `accepted_double_parent: true` on the note | the vault's frontmatter |
-| Outside the hierarchy: no group, not unassigned either, drawn in a pale neutral | Recap, Guide, Type, Operation, types whose `Type` note has `hierarchy_exempt: true`, archived notes, Inbox notes with no group (`_organized: false` or `status: Unprocessed`) | `exemptTypes` (no UI yet) |
+| Outside the hierarchy: no group, not unassigned either, drawn in a pale neutral | Recap, Guide, Type, Operation, types whose `Type` note has `hierarchy_exempt: true`, archived notes, Inbox notes with no group (`_organized: false` or `status: Unprocessed`) | Settings → Grouping → Outside the hierarchy (types); the flags are read from the notes |
 | Parentless notes coloured by their first lateral link to a group (marked "related" on hover), or else outside | Person | `lateralHomeTypes` (no UI yet) |
 | Type colours when no groups exist | `_color` on `type: Type` notes | the vault's Type notes |
 | Archived notes | `_archived: true` or `archived: true` | Settings → Filters |
