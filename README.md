@@ -2,7 +2,9 @@
 
 An interactive map of a Markdown vault whose notes have a `type` and link to each other through frontmatter, as in [Tolaria](https://tolaria.md/) and the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node and each relationship a link. Notes are coloured and grouped by the Project, Responsibility or Topic they belong to. It runs locally, opens notes in Tolaria, and never writes to the vault.
 
-![A 1,300-note vault coloured by nearest group, with group regions, hierarchy links in orange, and the Settings tab open](docs/brain-graph-second-brain.webp)
+![Brain Graph on a fictional 794-note demo vault, coloured by nearest group, while an agent answers a question: four notes it reads pulse blue across three project clusters, then the note it updates pulses orange](docs/brain-graph-demo.webp)
+
+*An agent answering "What is blocking the MRD manuscript revision?" in the demo vault: the notes it reads glow blue, the note it writes glows orange.*
 
 ## Why
 
@@ -47,15 +49,35 @@ Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and
 
 ## Agent activity
 
-Writes need nothing: the server already watches the vault. Reads come from the agents themselves, through a hook that runs after each tool call:
+Notes pulse on the map as agents use them: blue when Claude Code or Codex reads a note, orange when any app writes one. The glow fades over half a minute, so a session leaves a trail. Turn it off in Settings → Filters → *Pulse notes as agents read and write them*.
+
+**How it works.**
+
+- **Writes** need nothing: the server already watches the vault, so a note saved by an agent, Tolaria or you pulses orange.
+- **Reads** come from the agents. After each tool call, Claude Code and Codex run a small hook that works out which notes the call read or wrote. It sends their paths to the Brain Graph server on your machine, which forwards them to the open page.
+- Only note paths are sent, only to `127.0.0.1`, and nothing is stored. The hook prints nothing, never blocks the agent, and gives up after half a second when Brain Graph is not running.
+
+**Install.**
 
 ```bash
 npx github:mfoll/brain-graph install-hooks
 ```
 
-This copies the hook script to `~/.config/brain-graph/` and adds it to `~/.claude/settings.json` and `~/.codex/hooks.json`, for whichever of the two is installed, keeping a backup of each file. Name one agent to install only that one, and add `--port` if Brain Graph does not run on 5178. Codex runs a new hook only after you trust it: start `codex` and use `/hooks`. New agent sessions pick the hook up.
+This copies the hook to `~/.config/brain-graph/activity-hook.mjs`. It adds it to `~/.claude/settings.json` and `~/.codex/hooks.json`, for whichever of the two is installed, keeping a backup of each file and leaving other hooks alone. Name one agent (`install-hooks claude`) to install only that one, and add `--port` if Brain Graph does not run on 5178. New agent sessions pick the hook up. Codex runs a new hook only after you trust it: start `codex` and use `/hooks`. In the Claude desktop app the hook works as in the terminal; in the Codex desktop app it has not been checked yet.
 
-The hook reports Read, Edit and Write calls, Codex patches, and shell commands that read notes (`cat`, `sed`, `head` and similar). Search tools (`rg`, `grep`, `find`, `git`) are ignored. It costs about 75 ms per tool call in Claude Code and nothing noticeable in Codex, where it runs in the background, and it stays silent when Brain Graph is not running. Remove it with `npx github:mfoll/brain-graph uninstall-hooks`.
+Remove it with:
+
+```bash
+npx github:mfoll/brain-graph uninstall-hooks
+```
+
+**What counts as a read.**
+
+- Claude Code's Read, Edit and Write tools, and Codex patches, name their files, so those pulses are exact.
+- For shell commands the hook only sees the command text. It counts each note named in it as read, unless the program is a search tool (`rg`, `grep`, `find`, `git`) or the note follows `>`. A command that only mentions a note can therefore pulse it. A command that reads notes without naming them, such as `cat *.md` or a script, shows nothing.
+- Searches never light up the vault.
+
+**Cost.** About 75 ms per file or shell tool call in Claude Code, mostly starting Node, and nothing noticeable in Codex, where the hook runs in the background.
 
 ## Using it
 
@@ -114,6 +136,7 @@ Issues and pull requests are welcome. Keep vault conventions configurable, and r
 - `server/api.ts` serves the graph, note text, saved layouts and change events. The Vite plugin uses it in development and `bin/brain-graph.mjs` in the CLI.
 - `src/graph/home.ts` decides each note's group.
 - `src/graph/build.ts` builds the graph and its colours; `src/graph/hulls.ts` draws regions and names.
+- `hooks/activity-hook.mjs` is the agent hook, `bin/hooks.mjs` installs it, `server/activity.ts` turns reports and file changes into activity events, and `src/graph/activity.ts` draws the pulses.
 - `src/components/` holds the React interface. Rendering uses [Sigma.js](https://www.sigmajs.org/) 4 and [Graphology](https://graphology.github.io/), with ForceAtlas2 for the layout.
 
 ## Related tools
