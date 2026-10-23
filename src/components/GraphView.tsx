@@ -80,7 +80,6 @@ interface LayoutRunner {
   /** Maximum displacement of a node per frame, as a fraction of the current map span (Infinity = uncapped). */
   maxStep: number;
   /** Called after each frame with the current robust extent, so the frame can follow the map's natural scale. */
-  onFrame: ((extent: ReturnType<typeof robustExtent>) => void) | null;
   start(): void;
   stop(): void;
   isRunning(): boolean;
@@ -94,7 +93,6 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
   const runner: LayoutRunner = {
     iterations: 1,
     maxStep: Infinity,
-    onFrame: null,
     settings: {
       ...forceAtlas2.inferSettings(graph),
       gravity: 1,
@@ -109,19 +107,23 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
     start() {
       if (running) return;
       running = true;
+      // The physics steps on its own copy at its natural scale (normalising the simulated positions
+      // every frame fights ForceAtlas2 and collapses the map); the displayed graph gets a normalised
+      // copy each frame, so the frame and the on-screen node sizes never change during a run.
+      const sim = graph.copy();
       const step = () => {
         if (!running) return;
         const cap = runner.maxStep;
         if (Number.isFinite(cap)) {
           before.clear();
-          graph.forEachNode((n, a) => before.set(n, [a.x, a.y]));
+          sim.forEachNode((n, a) => before.set(n, [a.x, a.y]));
         }
-        forceAtlas2.assign(graph, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
-        // Let the physics keep its natural scale; cap each node's displacement relative to that scale.
-        const extent = robustExtent(graph);
+        forceAtlas2.assign(sim, { iterations: runner.iterations, settings: runner.settings, getEdgeWeight: "weight" });
+        // Cap each node's displacement relative to the physics' own scale.
+        const extent = robustExtent(sim);
         if (Number.isFinite(cap) && extent) {
           const capUnits = cap * extent.span;
-          graph.updateEachNodeAttributes(
+          sim.updateEachNodeAttributes(
             (n, a) => {
               const b = before.get(n);
               if (!b) return a;
@@ -135,7 +137,8 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
             { attributes: ["x", "y"] },
           );
         }
-        runner.onFrame?.(extent);
+        graph.updateEachNodeAttributes((n, a) => (sim.hasNode(n) ? { ...a, x: sim.getNodeAttribute(n, "x"), y: sim.getNodeAttribute(n, "y") } : a), { attributes: ["x", "y"] });
+        normalizePositions(graph);
         frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
@@ -341,22 +344,14 @@ export function GraphView(props: GraphViewProps) {
     if (import.meta.env.DEV) Object.assign(window as unknown as Record<string, unknown>, { __layout: layout, __fa2: forceAtlas2, __graph: graph });
     layoutRef.current = layout;
 
-    // The map is normalised to MAP_EXTENT around 0 on every layout frame, so the frame is fixed once:
+    // The displayed map is normalised to MAP_EXTENT around 0 on every layout frame, so the frame is fixed once:
     // nothing ever refits, node sizes stay constant, and "Fit" is just a smooth camera move.
     const half = MAP_EXTENT / 2 + MAP_EXTENT * 0.06;
     const fixedFrame = () => sigma.setCustomBBox({ x: [-half, half], y: [-half, half] });
     fixedFrame();
     const fitToVisible = fixedFrame;
-    // While a layout runs, the frame follows the map's natural scale (smoothly, every frame), so the
-    // whole map stays in view without the physics being forced to a size.
-    layout.onFrame = (extent) => {
-      if (!extent) return;
-      const pad = extent.span * 0.06;
-      const cx = (extent.x[0] + extent.x[1]) / 2;
-      const cy = (extent.y[0] + extent.y[1]) / 2;
-      const h = extent.span / 2 + pad;
-      sigma.setCustomBBox({ x: [cx - h, cx + h], y: [cy - h, cy + h] });
-    };
+    // The frame stays fixed during runs too: Sigma scales node sizes with the frame, so a frame that
+    // followed the map made every node shrink during a run and snap back at its end.
 
     // Expose the helpers to the effects below through the instance.
     const ext = sigma as unknown as Helpers;
