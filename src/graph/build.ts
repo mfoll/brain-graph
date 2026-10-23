@@ -2,7 +2,7 @@ import Graph from "graphology";
 import { circular } from "graphology-layout";
 import type { NoteNode, VaultGraph } from "../types";
 import { GHOST_COLOR, UNTYPED_COLOR, normalizeColor } from "./colors";
-import { anchorAt, homeChain, homeColor, isStructureKind, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
+import { anchorAt, homeChain, homeColor, isStructureKind, linkRole, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
 
 export interface NodeAttrs {
   label: string;
@@ -154,6 +154,8 @@ export interface BuiltGraph {
   fresh: string[];
   /** True when saved positions were applied to at least half of the nodes. */
   restored: boolean;
+  /** Where each placed note was shown before (its old spot, or its anchor for a new note), so it can glide in. */
+  arrivals: Map<string, { x: number; y: number }>;
 }
 
 export function collectPositions(graph: BrainGraph): Positions {
@@ -165,12 +167,12 @@ export function collectPositions(graph: BrainGraph): Positions {
 }
 
 /**
- * Where a note should sit: beside the placed neighbour it is most strongly linked to (summed layout
- * weight of all links between them, so a parent wins over lateral links). A centroid of neighbours was
- * tried first and dropped: a note linked into two clusters landed in the empty space between them.
- * Ghost and bridge neighbours do not count.
+ * The placed neighbour a note is most strongly linked to (summed layout weight of all links between
+ * them, so a parent wins over lateral links). A centroid of neighbours was tried first and dropped: a
+ * note linked into two clusters landed in the empty space between them. Ghost and bridge neighbours do
+ * not count.
  */
-function anchorPoint(graph: BrainGraph, node: string, placed: (n: string) => boolean): { x: number; y: number } | null {
+function anchorOf(graph: BrainGraph, node: string, placed: (n: string) => boolean): string | null {
   const weight = new Map<string, number>();
   graph.forEachEdge(node, (_e, ea, s, t) => {
     const m = s === node ? t : s;
@@ -179,7 +181,45 @@ function anchorPoint(graph: BrainGraph, node: string, placed: (n: string) => boo
   });
   let best: string | null = null;
   for (const [m, w] of weight) if (!best || w > weight.get(best)!) best = m;
-  return best ? { x: graph.getNodeAttribute(best, "x"), y: graph.getNodeAttribute(best, "y") } : null;
+  return best;
+}
+
+/**
+ * Put a note beside its anchor: at the distance the anchor's other linked notes sit, in the direction
+ * with the most free space, so it lands among its siblings without overlapping one. Nothing else moves,
+ * which is why a new note needs no layout run.
+ */
+function placeBeside(graph: BrainGraph, node: string, anchor: string, placed: (n: string) => boolean, span: number): void {
+  const { x: ax, y: ay } = graph.getNodeAttributes(anchor);
+  // Distances to the anchor's children (its siblings-to-be), or to all its linked notes if it has none:
+  // its own parent and lateral links usually sit much farther away.
+  const children: number[] = [];
+  const linked: number[] = [];
+  graph.forEachEdge(anchor, (_e, ea, s, t) => {
+    const m = s === anchor ? t : s;
+    const ma = graph.getNodeAttributes(m);
+    if (m === node || !placed(m) || ma.ghost || ma.bridge) return;
+    const d = Math.hypot(ma.x - ax, ma.y - ay);
+    linked.push(d);
+    const role = linkRole(ea.kind);
+    if ((role === "up" && t === anchor) || (role === "down" && s === anchor)) children.push(d);
+  });
+  const dists = (children.length ? children : linked).sort((a, b) => a - b);
+  const median = dists.length ? dists[Math.floor(dists.length / 2)] : span * 0.02;
+  const r = Math.min(span * 0.06, Math.max(span * 0.012, median));
+  const others: [number, number][] = [];
+  graph.forEachNode((m, ma) => {
+    if (m !== node && placed(m) && !ma.ghost && !ma.bridge && Math.abs(ma.x - ax) < r * 3 && Math.abs(ma.y - ay) < r * 3) others.push([ma.x, ma.y]);
+  });
+  let best = { x: ax + r, y: ay, free: -1 };
+  for (let k = 0; k < 24; k++) {
+    const t = (k / 24) * Math.PI * 2;
+    const x = ax + r * Math.cos(t), y = ay + r * Math.sin(t);
+    let free = Infinity;
+    for (const [ox, oy] of others) free = Math.min(free, Math.hypot(ox - x, oy - y));
+    if (free > best.free) best = { x, y, free };
+  }
+  graph.mergeNodeAttributes(node, { x: best.x, y: best.y });
 }
 
 /** Notes whose nearest linked note is farther than `limit`: placed before they had links, or relinked since. */
@@ -197,25 +237,27 @@ function strandedNodes(graph: BrainGraph, limit: number): string[] {
 }
 
 /**
- * Move stranded notes next to their strongest neighbours (a short layout run then settles them).
- * Returns the moved ids. Used when a map is restored and before "Update layout", whose small step
- * cap could otherwise never bring a far outlier back.
+ * Move stranded notes, and the notes in `also`, next to their strongest neighbours. Returns the moved
+ * ids. Used when a vault is reloaded (new, re-parented and stranded notes) and before "Update layout",
+ * whose small step cap could otherwise never bring a far outlier back.
  */
 export function placeStranded(graph: BrainGraph, also: string[] = []): string[] {
   const ext = robustExtent(graph);
   if (!ext) return [];
   const span = ext.span || 100;
   const moved = new Set([...also, ...strandedNodes(graph, span * 0.15)]);
-  const placed = (n: string) => !moved.has(n);
+  const out: string[] = [];
+  // One at a time, so siblings added together each see the ones already placed.
+  const done = new Set<string>();
+  const placed = (n: string) => !moved.has(n) || done.has(n);
   for (const n of moved) {
-    const p = anchorPoint(graph, n, placed);
-    if (!p) continue;
-    // A small random offset so siblings placed beside the same parent do not overlap.
-    const angle = Math.random() * Math.PI * 2;
-    const r = span * (0.01 + Math.random() * 0.015);
-    graph.mergeNodeAttributes(n, { x: p.x + Math.cos(angle) * r, y: p.y + Math.sin(angle) * r });
+    const anchor = anchorOf(graph, n, placed);
+    if (!anchor) continue;
+    placeBeside(graph, n, anchor, placed, span);
+    done.add(n);
+    out.push(n);
   }
-  return [...moved].filter((n) => anchorPoint(graph, n, () => true));
+  return out;
 }
 
 /**
@@ -241,7 +283,11 @@ export function placeSatellites(graph: BrainGraph): void {
   }
 }
 
-export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGraph {
+/**
+ * `moved` lists notes whose parent changed since the map was last shown: they are placed again beside
+ * their new parent, as new notes are.
+ */
+export function buildGraph(data: VaultGraph, saved?: Positions | null, moved: string[] = []): BuiltGraph {
   const colors = typeColorMap(data);
   const graph: BrainGraph = new Graph({ multi: true, type: "directed", allowSelfLoops: false });
   graph.setAttribute("vault", data.vault.slug);
@@ -307,6 +353,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   });
 
   const fresh: string[] = [];
+  const arrivals = new Map<string, { x: number; y: number }>();
   let applied = 0;
   if (saved) {
     let cx = 0, cy = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -328,15 +375,25 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
         const angle = (i / Math.max(1, fresh.length)) * Math.PI * 2;
         graph.mergeNodeAttributes(node, { x: cx + Math.cos(angle) * radius * 1.05, y: cy + Math.sin(angle) * radius * 1.05 });
       });
-      // New notes go next to their strongest neighbours; notes stranded far from every neighbour
-      // (placed before they had links) are brought back the same way, and both get the settling run.
-      for (const n of placeStranded(graph, fresh)) if (!fresh.includes(n)) fresh.push(n);
+      // New notes go next to their strongest neighbours; re-parented notes and notes stranded far from
+      // every neighbour (placed before they had links) are placed again the same way.
+      const before = new Map<string, { x: number; y: number }>();
+      const isNew = new Set(fresh);
+      graph.forEachNode((n, a) => void before.set(n, { x: a.x, y: a.y }));
+      for (const n of placeStranded(graph, [...fresh, ...moved.filter((m) => graph.hasNode(m) && !isNew.has(m))])) {
+        if (!fresh.includes(n)) fresh.push(n);
+        // A new note grows out of its anchor; a moved one glides from where it was.
+        const anchor = isNew.has(n) ? anchorOf(graph, n, (m) => m !== n) : null;
+        arrivals.set(n, anchor ? { x: graph.getNodeAttribute(anchor, "x"), y: graph.getNodeAttribute(anchor, "y") } : before.get(n)!);
+      }
     }
   }
   const restored = applied >= graph.order / 2;
-  normalizePositions(graph);
+  // A restored map keeps its frame as saved: rescaling it to fit one more or one fewer note would shift
+  // every other note a little.
+  if (!restored) normalizePositions(graph);
   placeSatellites(graph);
-  return { graph, fresh: restored ? fresh : [], restored };
+  return { graph, fresh: restored ? fresh : [], restored, arrivals: restored ? arrivals : new Map() };
 }
 
 /** Nodes within `depth` hops of `root` (undirected), including root. */

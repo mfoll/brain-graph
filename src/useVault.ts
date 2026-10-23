@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { VaultGraph, VaultInfo } from "./types";
 import type { Positions } from "./graph/build";
 import { loadSettings } from "./settingsStore";
@@ -51,21 +51,32 @@ export function useVault(slug: string | null) {
   // The server no longer serves this vault (its folder was moved, renamed or deleted).
   const [missing, setMissing] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const loaded = useRef<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    setData(null);
-    setError(null);
-    // Settings load with the graph, so the first render already uses them.
+    // Another vault starts from an empty page. A reload of the same vault (a note was added, changed
+    // or removed) keeps the current map on screen until the new graph arrives, so nothing flashes.
+    const switching = loaded.current !== slug;
+    if (switching) {
+      setData(null);
+      setError(null);
+    }
+    // Settings load with the graph on a vault switch, so the first render already uses them.
     const graph = fetch(`/api/graph?${q(slug)}`).then(async (r) => {
       if (r.status === 404) return (setMissing(slug), null);
       if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${r.status}`);
       return (await r.json()) as VaultGraph;
     });
-    Promise.all([graph, loadSettings(slug)])
-      .then(([g]) => !cancelled && g && setData(g))
-      .catch((e) => !cancelled && setError(String(e)));
+    Promise.all([graph, switching ? loadSettings(slug) : undefined])
+      .then(([g]) => {
+        if (cancelled || !g) return;
+        loaded.current = slug;
+        setData(g);
+      })
+      // A failed reload keeps the map shown; the next change on disk tries again.
+      .catch((e) => !cancelled && switching && setError(String(e)));
     return () => {
       cancelled = true;
     };

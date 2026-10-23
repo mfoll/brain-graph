@@ -48,10 +48,10 @@ Brain Graph shows the whole vault at once: how large each project is, where area
 - **Checks.** **Unassigned** lists notes with no group. **Outside the hierarchy** lists notes that are never placed in one, such as Guides or archived notes. Links to missing notes can be shown as grey dots.
 - **Other vaults.** When a note's frontmatter holds a path to a note in another vault you have added, that note appears as a rectangle beside it. Hover it for its title, or click it to read it in the panel.
 - **Filters.** Hide archived notes, orphans or weakly linked notes. Fold leaf types such as Sources into a count on their parent. Show only the neighbourhood of the selection.
-- **Stable layout.** The map is saved per vault and restored on the next start. New notes are placed next to the note they are most linked to. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
+- **Stable layout.** The map is saved per vault and restored on the next start. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
 - **Views and sharing.** Save a combination of filters, focus and colouring as a named view. The URL holds the vault, note and focus, so another note or a report can link to a view. **Export PNG** saves the current picture.
 - **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (orange), then fade over half a minute, so a session leaves a visible trail. Searches do not light up the vault. See [Agent activity](#agent-activity).
-- **Live.** The map updates when a note changes on disk.
+- **Live.** The map updates in place when a note changes on disk. A new note glides out of the note it is most linked to and settles among its siblings, a note given another parent glides to its new group, and a deleted note disappears. Nothing else moves.
 
 ## Install
 

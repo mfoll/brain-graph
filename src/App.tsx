@@ -3,8 +3,8 @@ import { GraphView } from "./components/GraphView";
 import { NotePanel, type PanelTab } from "./components/NotePanel";
 import { ExternalPanel } from "./components/ExternalPanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
-import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, isUnassigned, outsideReason, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
+import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, collectPositions, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
+import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, isUnassigned, linkRole, outsideReason, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { getSetting, setSetting } from "./settingsStore";
 import type { VaultGraph } from "./types";
@@ -35,7 +35,8 @@ function useTheme() {
   };
 }
 
-// Layout runs: from scratch (first start, Alt-click), a nudge of the existing map, or settling new notes.
+// Layout runs: from scratch (first start, Alt-click) or a nudge of the existing map. New notes need no
+// run: they are placed beside their strongest link and glide there (see buildGraph).
 // Short, damped from the first frame: almost all the useful movement happens early anyway.
 // `iterations` is ForceAtlas2 steps per animation frame: a first layout starts from a circle and needs
 // well over a thousand steps to form clusters, a nudge of an existing map needs a few dozen.
@@ -44,7 +45,6 @@ const LAYOUT_RUNS = {
   scratch: { duration: 8000, start: 6, maxStep: 0.01, iterations: 5 },
   recompute: { duration: 750, start: 24, maxStep: 0.001, iterations: 2 },
   tune: { duration: 750, start: 24, maxStep: 0.001, iterations: 2 }, // live preview after a physics change
-  settle: { duration: 750, start: 24, maxStep: 0.002, iterations: 2 },
 } as const;
 type LayoutRun = keyof typeof LAYOUT_RUNS;
 
@@ -154,6 +154,26 @@ const paramToSpotlight = (v: string | null): Spotlight => {
 };
 const initialUrl = new URLSearchParams(window.location.search);
 
+/** Notes whose parents changed between two versions of a vault. Groups (notes with children) stay where they are. */
+function reparented(prev: VaultGraph, next: VaultGraph): string[] {
+  const parents = (g: VaultGraph) => {
+    const out = new Map<string, Set<string>>();
+    const add = (child: string, parent: string) => (out.get(child) ?? out.set(child, new Set()).get(child)!).add(parent);
+    for (const e of g.edges) {
+      const role = linkRole(e.kind);
+      if (role === "up") add(e.source, e.target);
+      else if (role === "down") add(e.target, e.source);
+    }
+    return out;
+  };
+  const key = (set: Set<string> | undefined) => [...(set ?? [])].sort().join("|");
+  const before = parents(prev);
+  const after = parents(next);
+  const groups = new Set([...after.values()].flatMap((set) => [...set]));
+  const known = new Set(prev.nodes.map((n) => n.id));
+  return next.nodes.map((n) => n.id).filter((id) => known.has(id) && !groups.has(id) && key(before.get(id)) !== key(after.get(id)));
+}
+
 export default function App() {
   const { vaults, registry, error: vaultsError, refresh: refreshVaults, addVault, removeVault, setUseTolaria } = useVaults();
   const [manageVaults, setManageVaults] = useState(false);
@@ -222,9 +242,13 @@ export default function App() {
     }
   }, [saved.layout, seed, vaultSlug]);
 
+  // The vault as last shown, to find notes whose parent changed when it is reloaded.
+  const shownData = useRef<{ prev: VaultGraph | null; cur: VaultGraph | null }>({ prev: null, cur: null });
+  if (shownData.current.cur !== data) shownData.current = { prev: shownData.current.cur, cur: data };
   const built = useMemo(() => {
     if (!data || seed === undefined || seed.vault !== data.vault.slug) return null;
-    return buildGraph(data, latestPositions.current ?? seed.positions);
+    const prev = shownData.current.prev;
+    return buildGraph(data, latestPositions.current ?? seed.positions, prev && prev.vault.slug === data.vault.slug ? reparented(prev, data) : []);
   }, [data, seed]);
   const graph = built?.graph ?? null;
   const typeColors = useMemo(() => (data ? typeColorMap(data) : new Map<string, string>()), [data]);
@@ -363,16 +387,15 @@ export default function App() {
     }, 150);
   };
 
-  // A restored map needs no layout; new notes get a short settling run with everything else pinned.
-  const layoutPins = useMemo(() => {
-    if (!built || !built.restored || built.fresh.length === 0) return null;
-    const fresh = new Set(built.fresh);
-    return new Set(built.graph.nodes().filter((n) => !fresh.has(n)));
-  }, [built]);
+  // A map without saved positions gets a full run. A restored map needs none: notes placed while
+  // building it (new, re-parented or stranded) are saved where they were put.
   useEffect(() => {
     if (!built) return;
-    if (!built.restored) setLayoutRun("scratch");
-    else if (built.fresh.length > 0) setLayoutRun("settle");
+    if (!built.restored) return setLayoutRun("scratch");
+    if (built.fresh.length === 0) return;
+    const positions = collectPositions(built.graph);
+    latestPositions.current = positions;
+    void saved.save(positions);
   }, [built]);
   // Which link kinds the last layout run used: toggling kinds changes the forces but does not re-run.
   const layoutKinds = useRef<Set<string> | null>(null);
@@ -921,7 +944,7 @@ export default function App() {
           hidden={hidden}
           selected={selected}
           layoutRunning={layoutRun !== null}
-          layoutPins={layoutRun === "settle" ? layoutPins : null}
+          arrivals={built?.arrivals ?? null}
           layoutDuration={run.duration}
           layoutStart={run.start}
           layoutMaxStep={run.maxStep}

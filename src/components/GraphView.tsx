@@ -13,8 +13,8 @@ export interface GraphViewProps {
   hidden: Set<string>; // node ids hidden by filters
   selected: string | null;
   layoutRunning: boolean;
-  /** Nodes to keep fixed while the layout runs (settling only the new notes). */
-  layoutPins: Set<string> | null;
+  /** Notes placed while the graph was built, with where they were shown before: they glide from there once. */
+  arrivals: Map<string, { x: number; y: number }> | null;
   /** Milliseconds before the layout stops by itself. */
   layoutDuration: number;
   /** Initial ForceAtlas2 slowDown: ~8 from scratch, ~16 to nudge an existing map. */
@@ -161,6 +161,53 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
     },
   };
   return runner;
+}
+
+const played = new WeakSet<object>();
+const GLIDE_MS = 900;
+
+/**
+ * Move the given notes from their previous spot to their new one with an ease-out, everything else still.
+ * Their ghost and bridge satellites follow. `finish()` puts them at the end point at once; a glide cut
+ * short that way counts as not played, so the next renderer of the same build (the view remounts in
+ * React's development mode, or after a theme switch) plays it again.
+ */
+function playArrivals(graph: BrainGraph, arrivals: Map<string, { x: number; y: number }> | null): { finish: () => void } {
+  const moves: [string, number, number, number, number][] = [];
+  if (arrivals && arrivals.size && !played.has(arrivals)) {
+    for (const [n, from] of arrivals) {
+      if (!graph.hasNode(n)) continue;
+      const { x, y } = graph.getNodeAttributes(n);
+      if (Math.hypot(x - from.x, y - from.y) > 0.5) moves.push([n, from.x, from.y, x, y]);
+    }
+  }
+  let frame: number | null = null;
+  const set = (t: number) => {
+    const k = 1 - Math.pow(1 - t, 3);
+    for (const [n, x0, y0, x1, y1] of moves) graph.mergeNodeAttributes(n, { x: x0 + (x1 - x0) * k, y: y0 + (y1 - y0) * k });
+    placeSatellites(graph);
+  };
+  if (moves.length) {
+    set(0);
+    // The clock starts at the first frame: building a large map takes most of a glide's length.
+    let start: number | null = null;
+    const step = (now: number) => {
+      start ??= now;
+      const t = Math.min(1, (now - start) / GLIDE_MS);
+      set(t);
+      frame = t < 1 ? requestAnimationFrame(step) : null;
+      if (t >= 1) played.add(arrivals!);
+    };
+    frame = requestAnimationFrame(step);
+  }
+  return {
+    finish() {
+      if (frame === null) return;
+      cancelAnimationFrame(frame);
+      frame = null;
+      set(1);
+    },
+  };
 }
 
 type NS = { isSelected: boolean };
@@ -414,7 +461,11 @@ export function GraphView(props: GraphViewProps) {
       return new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
     };
 
+    // Notes placed on a reload glide to their spot, once per build (a filter change copies the graph again).
+    const glide = playArrivals(graph, propsRef.current.arrivals);
+
     return () => {
+      glide.finish();
       window.removeEventListener("brain-graph-activity", onActivity);
       activity.stop();
       container.removeEventListener("mousemove", onMove);
@@ -432,7 +483,7 @@ export function GraphView(props: GraphViewProps) {
     const layout = layoutRef.current;
     if (!layout) return;
     const fit = () => (sigmaRef.current as unknown as Helpers | null)?.__fit();
-    const { graph, layoutPins, layoutDuration, layoutStart, layoutMaxStep, layoutIterations, layoutSettings: ls } = props;
+    const { graph, layoutDuration, layoutStart, layoutMaxStep, layoutIterations, layoutSettings: ls } = props;
     const reset = () =>
       Object.assign(layout, {
         iterations: layoutIterations,
@@ -446,7 +497,6 @@ export function GraphView(props: GraphViewProps) {
     const stop = () => {
       layout.stop();
       reset();
-      if (layoutPins) graph.forEachNode((n) => graph.removeNodeAttribute(n, "fixed"));
       normalizePositions(graph);
       fit();
       propsRef.current.onLayoutProgress?.(0);
@@ -454,8 +504,6 @@ export function GraphView(props: GraphViewProps) {
     };
     if (props.layoutRunning) {
       if (!layout.isRunning()) {
-        // FA2 reads the `fixed` attribute on every step, so pin before starting.
-        if (layoutPins) graph.forEachNode((n) => graph.setNodeAttribute(n, "fixed", layoutPins.has(n)));
         reset();
         layout.start();
       }
