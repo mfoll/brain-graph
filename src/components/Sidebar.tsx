@@ -565,7 +565,7 @@ export function Sidebar(p: Props) {
                 <input type="range" min={0.3} max={3} step={0.1} value={filters.regionSize} onChange={(e) => onChange({ ...filters, regionSize: Number(e.target.value) })} />
               </label>
             )}
-            <label className="row" title="A group's name is shown at the median position of its notes when at least four are visible; names are placed largest group first and nudged to avoid each other. They fade while something is hovered or focused and shrink while all note labels are shown.">
+            <label className="row" title="One name per coloured region, so the colour level decides which groups are named: top-level groups, their direct sub-groups, or every note's nearest group. A focused group is always named. A name needs at least four visible notes, sits at their median, and is placed largest group first; a smaller name that finds no free spot on its own region is left out until you zoom in. Names fade while something is hovered or focused.">
               <input type="checkbox" checked={filters.names} onChange={(e) => onChange({ ...filters, names: e.target.checked })} />
               Group names
             </label>

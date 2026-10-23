@@ -79,7 +79,9 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     if (!note) return;
     const chain = homeChain(note, opts.index);
     if (!chain.length) return;
-    const anchor = anchorAt(opts.index, chain[0], opts.level);
+    // One region and one name per coloured group: the group at the colour level, the note's own group
+    // at "nearest group", and always the focused group itself, however deep it sits.
+    const anchor = opts.emphasis && chain.includes(opts.emphasis) ? opts.emphasis : opts.level === 2 ? chain[0] : anchorAt(opts.index, chain[0], opts.level);
     anchorOf.set(id, anchor);
     const p = sigma.graphToViewport({ x: a.x, y: a.y });
     (groups.get(anchor) ?? groups.set(anchor, []).get(anchor)!).push({ ...p, r: a.size * sizeRatio });
