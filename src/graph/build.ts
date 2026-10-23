@@ -100,6 +100,7 @@ export function robustExtent(graph: BrainGraph): { x: [number, number]; y: [numb
   const xs: number[] = [];
   const ys: number[] = [];
   graph.forEachNode((_n, a) => {
+    if (a.ghost || a.bridge) return;
     xs.push(a.x);
     ys.push(a.y);
   });
@@ -203,6 +204,29 @@ export function placeStranded(graph: BrainGraph, also: string[] = []): string[] 
   return [...moved].filter((n) => anchorPoint(graph, n, () => true));
 }
 
+/**
+ * Ghost (missing target) and bridge (archive record) nodes are decorations, not physics: they take no
+ * part in layout runs and sit in a small sunflower around the note that points at them (a bridge's first
+ * listing Project, a ghost's first mentioning note). Left to the physics they drifted to the map's rim
+ * while hidden, since their links are dropped when their toggle is off. Positions are in map units.
+ */
+export function placeSatellites(graph: BrainGraph): void {
+  const byAnchor = new Map<string, string[]>();
+  graph.forEachNode((n, a) => {
+    if (!a.ghost && !a.bridge) return;
+    const anchor = a.bridge?.via ?? graph.neighbors(n)[0];
+    if (anchor && graph.hasNode(anchor)) (byAnchor.get(anchor) ?? byAnchor.set(anchor, []).get(anchor)!).push(n);
+  });
+  for (const [anchor, sats] of byAnchor) {
+    const { x, y } = graph.getNodeAttributes(anchor);
+    sats.sort().forEach((n, k) => {
+      const r = 12 * Math.sqrt(k + 1);
+      const t = k * 2.39996; // golden angle: an even fan however many records a note lists
+      graph.mergeNodeAttributes(n, { x: x + r * Math.cos(t), y: y + r * Math.sin(t) });
+    });
+  }
+}
+
 export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGraph {
   const colors = typeColorMap(data);
   const graph: BrainGraph = new Graph({ multi: true, type: "directed", allowSelfLoops: false });
@@ -281,7 +305,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
         cx += pos[0]; cy += pos[1];
         minX = Math.min(minX, pos[0]); maxX = Math.max(maxX, pos[0]);
         minY = Math.min(minY, pos[1]); maxY = Math.max(maxY, pos[1]);
-      } else fresh.push(node);
+      } else if (!graph.getNodeAttribute(node, "ghost") && !graph.getNodeAttribute(node, "bridge")) fresh.push(node);
     });
     if (applied > 0) {
       cx /= applied; cy /= applied;
@@ -298,6 +322,7 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
   }
   const restored = applied >= graph.order / 2;
   normalizePositions(graph);
+  placeSatellites(graph);
   return { graph, fresh: restored ? fresh : [], restored };
 }
 

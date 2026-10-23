@@ -3,7 +3,7 @@ import Sigma from "sigma";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import { drawOnCanvas } from "@sigma/export-image";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { MAP_EXTENT, collectPositions, normalizePositions, robustExtent, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
+import { MAP_EXTENT, collectPositions, normalizePositions, placeSatellites, robustExtent, type BrainGraph, type EdgeAttrs, type LayoutSettings, type NodeAttrs, type Positions } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { clearHulls, drawHulls, type HullOptions } from "../graph/hulls";
 
@@ -111,6 +111,9 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
       // every frame fights ForceAtlas2 and collapses the map); the displayed graph gets a normalised
       // copy each frame, so the frame and the on-screen node sizes never change during a run.
       const sim = graph.copy();
+      sim.forEachNode((n, a) => {
+        if (a.ghost || a.bridge) sim.dropNode(n);
+      });
       const step = () => {
         if (!running) return;
         const cap = runner.maxStep;
@@ -139,6 +142,7 @@ function createLayoutRunner(graph: BrainGraph): LayoutRunner {
         }
         graph.updateEachNodeAttributes((n, a) => (sim.hasNode(n) ? { ...a, x: sim.getNodeAttribute(n, "x"), y: sim.getNodeAttribute(n, "y") } : a), { attributes: ["x", "y"] });
         normalizePositions(graph);
+        placeSatellites(graph);
         frame = requestAnimationFrame(step);
       };
       frame = requestAnimationFrame(step);
