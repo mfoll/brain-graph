@@ -8,7 +8,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { firstH1, buildGraph, slugify, type VaultGraph, firstParagraph, splitFrontmatter } from "./vault.ts";
-import { followActivity } from "./activity.ts";
+import { noteFor, type Activity } from "./activity.ts";
 import type { Bridge, VaultInfo } from "../shared/types.ts";
 
 export interface VaultApiOptions {
@@ -167,13 +167,10 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   const caches = new Map<string, Promise<VaultGraph>>();
   const watchers = new Map<string, ReturnType<typeof chokidar.watch>>();
   const clients = new Map<string, Set<import("node:http").ServerResponse>>();
-  // Proof of concept: notes read or written by other apps, from a file of Endpoint Security events. Started
-  // when the first page connects, so a build or a script that only loads this module can exit.
-  let stopActivity: (() => void) | null = null;
-  const startActivity = () =>
-    (stopActivity ??= followActivity(path.join(path.dirname(layoutDir), "activity.jsonl"), vaults, (a) => {
-      for (const res of clients.get(a.vault) ?? []) res.write(`event: activity\ndata: ${JSON.stringify(a)}\n\n`);
-    }));
+  // Proof of concept: notes read or written by other apps reach the vault's open pages as "activity".
+  const sendActivity = (a: Activity) => {
+    for (const res of clients.get(a.vault) ?? []) res.write(`event: activity\ndata: ${JSON.stringify(a)}\n\n`);
+  };
 
   const resolveVault = async (req: import("node:http").IncomingMessage): Promise<{ info: VaultInfo; url: URL } | null> => {
     const url = new URL(req.url ?? "", "http://localhost");
@@ -195,7 +192,9 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
       awaitWriteFinish: { stabilityThreshold: 200 },
     });
     let timer: NodeJS.Timeout | null = null;
-    watcher.on("all", () => {
+    watcher.on("all", (event, file) => {
+      const note = event === "add" || event === "change" ? noteFor(file, [info]) : null;
+      if (note) sendActivity({ ...note, kind: "write", source: "file", time: Date.now() });
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
     caches.delete(info.slug);
@@ -434,6 +433,29 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
     }
   }]);
 
+  // Reports from agent hooks: { source, items: [{ path, kind }] } with absolute paths. Only notes inside a
+  // registered vault are passed on; the server listens on localhost only.
+  routes.push(["/api/activity", async (req, res) => {
+    if (req.method !== "POST") return json(res, { error: "POST only" }, 405);
+    try {
+      const body = JSON.parse(await readBody(req)) as { source?: unknown; items?: unknown };
+      const source = typeof body.source === "string" ? body.source.slice(0, 32) : "agent";
+      const items = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
+      const list = await vaults();
+      let sent = 0;
+      for (const it of items as { path?: unknown; kind?: unknown }[]) {
+        if (typeof it?.path !== "string" || (it.kind !== "read" && it.kind !== "write")) continue;
+        const note = noteFor(path.resolve(it.path), list);
+        if (!note) continue;
+        sendActivity({ ...note, kind: it.kind, source, time: Date.now() });
+        sent++;
+      }
+      json(res, { ok: true, sent });
+    } catch (err) {
+      json(res, { error: String(err) }, 400);
+    }
+  }]);
+
   routes.push(["/api/events", async (req, res) => {
     const v = await resolveVault(req);
     if (!v) {
@@ -441,7 +463,6 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
       return res.end();
     }
     watch(v.info);
-    startActivity();
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
     res.write(": connected\n\n");
     const set = clients.get(v.info.slug) ?? clients.set(v.info.slug, new Set()).get(v.info.slug)!;
@@ -469,7 +490,6 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
     return false;
   };
   const close = async () => {
-    stopActivity?.();
     for (const w of watchers.values()) await w.close();
   };
   return { handle, close, vaults, layoutDir };

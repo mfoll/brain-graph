@@ -8,8 +8,11 @@ const RIPPLE_MS = 1600;
 const GLOW_MS = 30_000;
 const COLOURS: Record<Kind, string> = { read: "#3b82f6", write: "#e69f00" };
 
+// Kept outside any one layer: a file change reloads the graph and recreates the layer, and the pulse that
+// change caused must carry on.
+const pulses = new Map<string, { t0: number; kind: Kind }>();
+
 export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasElement) {
-  const pulses = new Map<string, { t0: number; kind: Kind }>();
   let frame: number | null = null;
 
   const draw = () => {
@@ -30,10 +33,11 @@ export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTM
     const sizeRatio = sigma.scaleSize(1);
     for (const [id, p] of pulses) {
       const age = now - p.t0;
-      if (age > GLOW_MS || !graph.hasNode(id)) {
+      if (age > GLOW_MS) {
         pulses.delete(id);
         continue;
       }
+      if (!graph.hasNode(id)) continue;
       const a = graph.getNodeAttributes(id);
       const c = sigma.graphToViewport({ x: a.x, y: a.y });
       const r = Math.max(3, a.size * sizeRatio);
@@ -57,6 +61,7 @@ export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTM
     if (pulses.size) frame = requestAnimationFrame(draw);
   };
 
+  if (pulses.size) frame = requestAnimationFrame(draw);
   return {
     pulse(id: string, kind: Kind) {
       if (!graph.hasNode(id)) return;
@@ -65,7 +70,6 @@ export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTM
     },
     stop() {
       if (frame !== null) cancelAnimationFrame(frame);
-      pulses.clear();
     },
   };
 }
