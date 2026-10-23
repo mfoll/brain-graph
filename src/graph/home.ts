@@ -58,7 +58,7 @@ export const PALETTES = {
   nord: { label: "Nord", colors: ["#5e81ac", "#d08770", "#a3be8c", "#b48ead", "#ebcb8b", "#bf616a", "#88c0d0", "#81a1c1", "#8fbcbb", "#d8dee9"] },
 } as const;
 export type PaletteId = keyof typeof PALETTES;
-export const DEFAULT_PALETTE: PaletteId = "vivid";
+export const DEFAULT_PALETTE: PaletteId = "okabe"; // colour-blind safe
 
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const m = hex.replace("#", "");

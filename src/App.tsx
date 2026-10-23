@@ -6,6 +6,7 @@ import { Sidebar, type Filters } from "./components/Sidebar";
 import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, isUnassigned, outsideReason, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
+import { getSetting, setSetting } from "./settingsStore";
 import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
 
@@ -87,7 +88,7 @@ const VAULT_KEY = "brain-graph.vault";
 type RememberedView = Partial<Omit<Filters, "types" | "kinds" | "spotlight">> & { hiddenTypes?: string[]; hiddenKinds?: string[]; collapseType?: string | null; collapseSources?: boolean };
 function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters {
   const hiddenTypes = new Set(v.hiddenTypes ?? ["Type"]);
-  const hiddenKinds = new Set(v.hiddenKinds ?? ["body"]);
+  const hiddenKinds = new Set(v.hiddenKinds ?? DEFAULT_HIDDEN_KINDS);
   return {
     ...f,
     hideArchived: v.hideArchived ?? true,
@@ -103,7 +104,7 @@ function viewToFilters(f: Filters, v: RememberedView, data: VaultGraph): Filters
     regionSize: v.regionSize ?? 1,
     linkOpacity: v.linkOpacity ?? 0.55,
     ghosts: v.ghosts ?? false,
-    bridges: v.bridges ?? false,
+    bridges: v.bridges ?? true,
     linkWidth: v.linkWidth ?? 1,
     labelThreshold: v.labelThreshold ?? 7,
     types: new Set(data.types.map((t) => t.name).filter((t) => !hiddenTypes.has(t))),
@@ -118,13 +119,9 @@ function filtersToView(f: Filters, data: VaultGraph): RememberedView {
 }
 /** A named view: the remembered filters plus focus and roll-up level, kept per vault in the browser. */
 type SavedView = { name: string; view: RememberedView; focus: string | null; level: HomeLevel };
-const readViews = (slug: string): SavedView[] => {
-  try {
-    return JSON.parse(localStorage.getItem(`brain-graph.views.${slug}`) ?? "[]");
-  } catch {
-    return [];
-  }
-};
+const readViews = (slug: string): SavedView[] => getSetting<SavedView[]>(slug, "views") ?? [];
+/** Link kinds hidden until shown: text links, and related_to, which is context rather than structure. */
+const DEFAULT_HIDDEN_KINDS = ["body", "related_to"];
 
 type Spotlight = Filters["spotlight"];
 const spotlightToParam = (sp: Spotlight) => {
@@ -226,9 +223,9 @@ export default function App() {
     if (!data || homeSettingsVault === data.vault.slug) return;
     let next: HomeSettings = { hubTypes: new Set(vaultDefaults), useHas: true };
     try {
-      const raw = localStorage.getItem(`brain-graph.grouping.${data.vault.slug}`);
-      if (raw) {
-        const v = JSON.parse(raw) as { hubTypes: string[]; useHas: boolean; palette?: string; roles?: Record<string, string>; exemptTypes?: string[] };
+      const v0 = getSetting<unknown>(data.vault.slug, "grouping");
+      if (v0) {
+        const v = v0 as { hubTypes: string[]; useHas: boolean; palette?: string; roles?: Record<string, string>; exemptTypes?: string[] };
         const roles: Record<string, LinkRole> = {};
         for (const [k, r] of Object.entries(v.roles ?? {})) if (r === "up" || r === "down" || r === "lateral") roles[k] = r;
         if (Array.isArray(v.hubTypes) && v.hubTypes.length) next = { hubTypes: new Set(v.hubTypes), useHas: v.useHas !== false, palette: v.palette && v.palette in PALETTES ? (v.palette as PaletteId) : DEFAULT_PALETTE, roles, exemptTypes: Array.isArray(v.exemptTypes) ? new Set(v.exemptTypes) : undefined };
@@ -242,7 +239,7 @@ export default function App() {
   const setHomeSettings = (next: HomeSettings) => {
     setHomeSettingsState(next);
     try {
-      if (data) localStorage.setItem(`brain-graph.grouping.${data.vault.slug}`, JSON.stringify({ hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE, roles: next.roles ?? {}, exemptTypes: next.exemptTypes ? [...next.exemptTypes] : undefined }));
+      if (data) setSetting(data.vault.slug, "grouping", { hubTypes: [...next.hubTypes], useHas: next.useHas, palette: next.palette ?? DEFAULT_PALETTE, roles: next.roles ?? {}, exemptTypes: next.exemptTypes ? [...next.exemptTypes] : undefined });
     } catch {
       /* ignore */
     }
@@ -274,7 +271,7 @@ export default function App() {
     linkWidth: 1,
     labelThreshold: 7,
     ghosts: false,
-    bridges: false,
+    bridges: true,
   });
   // Initialise filters from the data once: everything visible except body links (too noisy by default).
   const [initialised, setInitialised] = useState<string | null>(null);
@@ -283,7 +280,7 @@ export default function App() {
     // View filters are remembered per vault; types or kinds that no longer exist are dropped, new ones shown.
     let remembered: RememberedView = {};
     try {
-      remembered = JSON.parse(localStorage.getItem(`brain-graph.view.${data.vault.slug}`) ?? "{}");
+      remembered = getSetting<RememberedView>(data.vault.slug, "view") ?? {};
     } catch {
       /* ignore */
     }
@@ -320,9 +317,8 @@ export default function App() {
     if (!data || layoutSettingsVault === data.vault.slug) return;
     let next = DEFAULT_LAYOUT;
     try {
-      const raw = localStorage.getItem(`brain-graph.layout.${data.vault.slug}`);
-      if (raw) {
-        const v = JSON.parse(raw) as Record<string, unknown>;
+      const v = getSetting<Record<string, unknown>>(data.vault.slug, "layout");
+      if (v) {
         // Only finite numbers within range survive; anything else (older keys, null, NaN) falls back to the default.
         const num = (k: keyof LayoutSettings, min: number, max: number) => {
           const x = v[k];
@@ -341,7 +337,7 @@ export default function App() {
   const setLayoutSettings = (next: LayoutSettings) => {
     setLayoutSettingsState(next);
     try {
-      if (data) localStorage.setItem(`brain-graph.layout.${data.vault.slug}`, JSON.stringify(next));
+      if (data) setSetting(data.vault.slug, "layout", next);
     } catch {
       /* ignore */
     }
@@ -598,7 +594,7 @@ export default function App() {
   useEffect(() => {
     if (!data || initialised !== data.vault.slug) return;
     try {
-      localStorage.setItem(`brain-graph.view.${data.vault.slug}`, JSON.stringify(filtersToView(filters, data)));
+      setSetting(data.vault.slug, "view", filtersToView(filters, data));
     } catch {
       /* ignore */
     }
@@ -610,7 +606,7 @@ export default function App() {
   const writeViews = (slug: string, next: SavedView[]) => {
     setViews(next);
     try {
-      localStorage.setItem(`brain-graph.views.${slug}`, JSON.stringify(next));
+      setSetting(slug, "views", next);
     } catch {
       /* ignore */
     }
@@ -687,7 +683,7 @@ export default function App() {
   };
   // Deviations from the default view, each with its own undo. Defaults themselves (body links hidden,
   // archived hidden) are not listed, so an empty line means "the default view".
-  const defaultKinds = (k: string) => k !== "body";
+  const defaultKinds = (k: string) => !DEFAULT_HIDDEN_KINDS.includes(k);
   const stateParts: { label: string; title: string; clear: () => void }[] = [];
   if (filters.spotlight) {
     const sp = filters.spotlight;
@@ -702,18 +698,17 @@ export default function App() {
       clear: () => setFilters((f) => ({ ...f, types: new Set(data.types.map((t) => t.name).filter((t) => t !== "Type")) })),
     });
   const hiddenKinds = data.edgeKinds.filter((k) => !filters.kinds.has(k.kind) && defaultKinds(k.kind));
-  const shownBody = filters.kinds.has("body");
   if (hiddenKinds.length)
     stateParts.push({
       label: hiddenKinds.length === 1 ? `${hiddenKinds[0].kind} links hidden` : `${hiddenKinds.length} link kinds hidden`,
       title: `Hidden: ${hiddenKinds.map((k) => k.kind).join(", ")}`,
       clear: () => setFilters((f) => ({ ...f, kinds: new Set(data.edgeKinds.map((k) => k.kind).filter((k) => defaultKinds(k) || f.kinds.has(k))) })),
     });
-  if (shownBody) stateParts.push({ label: "body links shown", title: "Links written in note text, hidden by default", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((k) => k !== "body")) })) });
+  for (const k of DEFAULT_HIDDEN_KINDS.filter((x) => filters.kinds.has(x))) stateParts.push({ label: `${k} links shown`, title: "Hidden by default", clear: () => setFilters((f) => ({ ...f, kinds: new Set([...f.kinds].filter((x) => x !== k)) })) });
   if (filters.collapseTypes.length) stateParts.push({ label: filters.collapseTypes.length === 1 ? `${filters.collapseTypes[0]} collapsed` : `${filters.collapseTypes.length} types collapsed`, title: `${filters.collapseTypes.join(", ")} notes are counted on their parent`, clear: () => setFilters((f) => ({ ...f, collapseTypes: [] })) });
   if (filters.minDegree) stateParts.push({ label: `notes with < ${filters.minDegree} links hidden`, title: "Notes with few links are hidden", clear: () => setFilters((f) => ({ ...f, minDegree: 0 })) });
   if (filters.recency) stateParts.push({ label: "faded by recency", title: "Notes not edited recently are faded", clear: () => setFilters((f) => ({ ...f, recency: false })) });
-  if (filters.bridges) stateParts.push({ label: "other-vault notes shown", title: "Notes from other vaults are shown as rectangles", clear: () => setFilters((f) => ({ ...f, bridges: false })) });
+  if (!filters.bridges && (data.bridges?.length ?? 0) > 0) stateParts.push({ label: "other-vault notes hidden", title: "Shown by default", clear: () => setFilters((f) => ({ ...f, bridges: true })) });
   if (filters.ghosts) stateParts.push({ label: "missing targets shown", title: "Links to missing notes are shown as grey dots", clear: () => setFilters((f) => ({ ...f, ghosts: false })) });
   if (!filters.hideArchived) stateParts.push({ label: "archived shown", title: "Archived notes are hidden by default", clear: () => setFilters((f) => ({ ...f, hideArchived: true })) });
   if (filters.focusDepth) stateParts.push({ label: `${filters.focusDepth} ${filters.focusDepth === 1 ? "link" : "links"} around selection`, title: "Only notes near the selection are shown", clear: () => setFilters((f) => ({ ...f, focusDepth: 0 })) });

@@ -47,7 +47,7 @@ export interface LayoutSettings {
   /** How many times harder a structure link (belongs_to, has, parent_*) pulls than a lateral one. 1–10. */
   ratio: number;
 }
-export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 1, ratio: 6 };
+export const DEFAULT_LAYOUT: LayoutSettings = { nodeScale: 1, gravity: 0.5, ratio: 6 };
 
 /** Visual weight of lateral links by ratio: 1 at ratio 1 (same as structure), 0.5 at the default 6, 0.1 at 10. */
 export const lateralEmphasis = (ratio: number) => 0.1 + 0.9 * Math.max(0, Math.min(1, (10 - ratio) / 9));

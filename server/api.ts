@@ -355,6 +355,30 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
 
       // Saved layout positions per vault: GET returns {savedAt, positions, hasPrevious} or 404; PUT stores
       // (keeping the previous version as <slug>.prev.json); DELETE removes.
+  // Per-vault settings: one JSON file per vault next to the layouts, replaced as a whole on each save.
+  const settingsDir = path.join(path.dirname(layoutDir), "settings");
+  routes.push(["/api/settings", async (req, res) => {
+    try {
+      const v = await resolveVault(req);
+      if (!v) return json(res, { error: "unknown vault" }, 404);
+      const file = path.join(settingsDir, `${v.info.slug}.json`);
+      if (req.method === "PUT") {
+        const body = await readBody(req);
+        if (body.length > 512 * 1024) return json(res, { error: "settings too large" }, 413);
+        const parsed = JSON.parse(body) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json(res, { error: "expected an object" }, 400);
+        await fs.mkdir(settingsDir, { recursive: true });
+        await fs.writeFile(`${file}.tmp`, JSON.stringify(parsed, null, 2));
+        await fs.rename(`${file}.tmp`, file);
+        return json(res, { ok: true });
+      }
+      const text = await fs.readFile(file, "utf8").catch(() => "{}");
+      json(res, JSON.parse(text));
+    } catch (err) {
+      json(res, { error: String(err) }, 500);
+    }
+  }]);
+
   routes.push(["/api/layout", async (req, res) => {
     try {
       const v = await resolveVault(req);

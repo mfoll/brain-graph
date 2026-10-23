@@ -40,7 +40,7 @@ npm install -g github:mfoll/brain-graph
 brain-graph ~/path/to/vault
 ```
 
-Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list and one saved layout per vault. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
+Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and for each vault its saved layout and settings. Copy that folder to keep the same maps and settings on another machine. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
 
 ## Using it
 

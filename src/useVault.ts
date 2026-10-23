@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { VaultGraph, VaultInfo } from "./types";
 import type { Positions } from "./graph/build";
+import { loadSettings } from "./settingsStore";
 
 export interface SavedLayout {
   savedAt: string;
@@ -47,9 +48,9 @@ export function useVault(slug: string | null) {
     if (!slug) return;
     let cancelled = false;
     setData(null);
-    fetch(`/api/graph?${q(slug)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((g: VaultGraph) => !cancelled && setData(g))
+    // Settings load with the graph, so the first render already uses them.
+    Promise.all([fetch(`/api/graph?${q(slug)}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))), loadSettings(slug)])
+      .then(([g]: [VaultGraph, void]) => !cancelled && setData(g))
       .catch((e) => !cancelled && setError(String(e)));
     return () => {
       cancelled = true;
