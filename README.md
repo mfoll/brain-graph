@@ -1,134 +1,119 @@
 # Brain Graph
 
-An interactive map of a **Second Brain vault**: a folder of Markdown notes with YAML frontmatter and wikilinks, the kind kept with [Tolaria](https://tolaria.md/) and structured with the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node, each relationship a link, and notes are coloured and grouped by the Project, Responsibility or Topic they belong to. The map runs locally from the folder, opens notes back in Tolaria, and never writes to the vault.
+An interactive map of a Markdown vault whose notes have a `type` and link to each other through frontmatter, as in [Tolaria](https://tolaria.md/) and the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node and each relationship a link. Notes are coloured and grouped by the Project, Responsibility or Topic they belong to. It runs locally, opens notes in Tolaria, and never writes to the vault.
 
-![Brain Graph showing a 1,300-note vault: group regions tinted by nearest Project or Responsibility, hierarchy links drawn in orange, and the Settings tab with grouping types and link roles](docs/brain-graph-second-brain.webp)
+![A 1,300-note vault: coloured group regions, hierarchy links in orange, and the Settings tab](docs/brain-graph-second-brain.webp)
 
-[Why a map](#why-a-map) · [What it shows](#what-it-shows) · [Install and run](#install-and-run) · [Everyday use](#everyday-use) · [Vault conventions](#vault-conventions) · [Development](#development) · [How it works](#how-it-works) · [Related tools](#related-tools) · [Status](#status) · [Licence](#licence)
+## Why
 
-## Why a map
+[Portent](https://github.com/refactoringhq/portent), the specification Tolaria follows, gives each note a `type` and typed relationships: `belongs_to` points to a parent, `has` lists highlights, `related_to` links sideways. Tolaria shows these relationships one note at a time. It has no graph view ([refactoringhq/tolaria#587](https://github.com/refactoringhq/tolaria/issues/587)) and no plugin system yet ([#1046](https://github.com/refactoringhq/tolaria/issues/1046)).
 
-A Second Brain of this kind is a graph by construction. [Portent](https://github.com/refactoringhq/portent), the open specification Tolaria follows, gives notes a `type` (Project, Source, Question, Concept, Person…) and typed relationships: `belongs_to` names a parent, `has` selects entry points, `related_to` links laterally. The [Second Brain template](https://github.com/mfoll/second-brain-template) adds the operating rules for agents and a hierarchy contract: every durable note rolls up to a Responsibility, and Topics stay lateral. Tolaria shows this structure one note at a time, as lists of relationships; it has no graph view ([refactoringhq/tolaria#587](https://github.com/refactoringhq/tolaria/issues/587)), and a plugin system is a tracked feature request rather than something to build on ([#1046](https://github.com/refactoringhq/tolaria/issues/1046)).
+Brain Graph shows the whole vault at once: how large each project is, where areas of work connect, and which notes have no place in the hierarchy. It reads the folder directly, so Tolaria is optional. Any folder of Markdown notes with a `type` in their frontmatter works.
 
-Brain Graph is the missing picture. Seen whole, the vault answers questions a list cannot: which projects have grown large, which notes sit far from any Responsibility, where two areas of work actually touch, whether a Topic has quietly become a parent. The same view is an audit instrument for the hierarchy contract: the viewer shows which chain of links it followed for every note and lists those that reach no group, and a companion command prints the inferred hierarchy for an agent to review.
+## Features
 
-It is a standalone companion, not a Tolaria extension: it reads the vault folder directly, Tolaria is optional, and any folder of Markdown notes whose frontmatter carries a `type` and wikilink relationships works. The conventions it assumes are the Tolaria and template defaults, and every one of them can be changed per vault in Settings.
+- **Groups.** Every note takes the colour of the group it belongs to through its `belongs_to` links. Choose which types count as groups and how deep the colouring goes: top-level groups, their sub-groups, or each note's nearest group. Groups get a shaded region and a name.
+- **Links.** Every frontmatter key holding wikilinks becomes a link kind that you can show or hide. Links written in the note text are a separate kind, hidden by default. Parent links pull harder in the layout than other links.
+- **Explore.** Browse the group tree, the types and the link kinds in the sidebar. Click any of them to light its notes and fade the rest. Under a type, click a property value such as `status: Active` to light those notes.
+- **Note panel.** Read the note with its callouts, tables and images, follow wikilinks across the map, list its links by kind, and see the members of a group. **why?** shows the links that place a note in its group. **Open in Tolaria** opens the note there.
+- **Checks.** **Unassigned** lists notes with no group. **Outside the hierarchy** lists notes that are never placed in one, such as Guides or archived notes. Links to missing notes can be shown as grey dots.
+- **Other vaults.** When a note's frontmatter holds a path to a note in another vault you have added, that note appears as a rectangle beside it. Hover it for its title, or click it to read it in the panel.
+- **Filters.** Hide archived notes, orphans or weakly linked notes. Fold leaf types such as Sources into a count on their parent. Show only the neighbourhood of the selection.
+- **Stable layout.** The map is saved per vault and restored on the next start. New notes are placed next to the note they are most linked to. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
+- **Views and sharing.** Save a combination of filters, focus and colouring as a named view. The URL holds the vault, note and focus, so another note or a report can link to a view. **Export PNG** saves the current picture.
+- **Live.** The map updates when a note changes on disk.
 
-## What it shows
+## Install
 
-**Nodes.** One node per note, sized by its number of links. Group types (default Project, Responsibility, Topic) are drawn as shapes in the order picked (◆ ■ ▲ ▬); every other note is a circle. Hovering shows type, status, link counts and the first paragraph, and lights the neighbours. Clicking opens the note.
-
-**Colour by group.** Every note rolls up through its `belongs_to` chain (or `parent_*` keys) to the nearest group note and takes its colour. A slider chooses the roll-up level: colour by first-level Responsibility or Topic, or by individual Project. Six palettes. A vault with no group notes at all falls back to the colours declared on its `Type` notes.
-
-**Links.** One edge per relationship: every frontmatter key whose value contains wikilinks counts, which is Tolaria's rule, so `belongs_to`, `has`, `related_to`, `surface_for` and custom keys such as `source_note` all appear, each toggleable. Body wikilinks are a separate, thinner `body` kind, hidden by default. Structure links (child → parent, parent → children) are drawn stronger than lateral ones, and a single ratio decides how much harder they pull in the layout and how much lighter lateral links are drawn.
-
-**Regions and names.** A tinted region behind each group at the current roll-up level, built from discs around member notes and strokes along the hierarchy links inside the group, so a cluster reads as one shape. Regions scale with zoom and have a size slider. There is one name per region, so the colour level decides which groups are named: top-level groups, their direct sub-groups, or every note's nearest group, and a focused group always gets its own region and name however deep it sits. A name needs at least four visible notes and sits at their median; names are placed largest group first, and a smaller name that collides tries other spots on its own region before being left out until you zoom in. Regions and names are separate toggles and fade while something is hovered or focused.
-
-**Sidebar.** *Explore* lists Groups (the hierarchy with note counts), Types (expandable to their notes, with facets such as `status` for one-click focus on, say, open Questions) and Links. Clicking a row focuses it: its notes stay lit and labelled, everything else fades, and a group's note opens in the panel. *Settings* holds everything that changes how the map is computed or drawn, split by effect: Grouping, Layout, Appearance (palette, colour level, node size, link opacity and width, the node size from which labels appear as you zoom, regions, names, recency), Filters. A state line under the header lists what is in effect (focus, hidden types or links, skeleton view…), each with its own undo, and holds the **views** menu: save the current filters, focus and colour level under a name, switch between saved views and the default, delete one. Views are kept per vault in the browser.
-
-**Note panel.** The note's Markdown rendered with callouts, tables and vault images; wikilinks navigate the map. A Links tab groups relationships by kind, a Members tab lists a group's notes by type, and a **why?** link on the breadcrumb shows the exact chain the viewer followed to assign the note. Back and forward arrows replay your path. **Open in Tolaria** uses the `tolaria://<vault>/<path>.md` deep link.
-
-**Audit views.** The Groups tree ends with **Unassigned**, the notes whose chain reaches no group, and **Outside the hierarchy**, the notes left out by design (pale neutral; the hover and panel say why). **Show missing link targets** draws every wikilink target that is no note (a typo, a renamed note, a template placeholder) as a grey ghost node linked from the notes that mention it. **Show notes from other vaults** draws the links your vault already writes into another vault you have registered: any frontmatter value that is a relative path to a note there (or to a folder whose note is `index.md`, `README.md`, `record.md` or `<folder>.md`) and to no note of the current vault. Each target is a rectangle in a small fan beside the note that lists it, in that note's colour; hovering shows its title, type and first paragraph, clicking opens it in the panel with its text and an **Open in Tolaria** link into its own vault, and focusing a group lights its rectangles too. A path found in several other vaults is skipped, so a template vault that mirrors your paths does not create false links. Nothing is configured: in the vault pictured, Projects list archived papers and grants by path, which shows which Projects have produced publications and which publications two Projects share. Filters hide archived notes and orphans, keep only notes with at least N visible links (skeleton view; group notes always stay), collapse one or more leaf types such as Sources into a `+N` count on their parent, and fade notes by time since last edit.
-
-**Layout.** ForceAtlas2, stepped a few iterations per animation frame and cooled so nodes come to rest within the run. Positions are saved per vault when a run stops, so the map is stable between sessions; a new note is placed beside the note it is most strongly linked to (its parent, usually) and settles there while the rest stays put. A note left far from all its links, for instance created before it had any, is brought back the same way on the next load or **Update layout**. **Update layout** nudges the current map for under a second; **Reset layout** redoes it from scratch in a few seconds and keeps a backup of the previous map. Nodes are not draggable: hand placement would not survive the next run.
-
-**Sharing.** **Export PNG** saves the current view at twice the screen resolution. The URL carries the vault, note, focus and roll-up level (`?vault=…&note=…&focus=hub:my-project&level=0`, or `focus=search:budget` for a search), so a note in Tolaria or an agent report can link straight into a view. Everything else you toggle is remembered per vault in the browser.
-
-**Live.** The server watches the vault and the map rebuilds when a note changes.
-
-## Install and run
-
-Brain Graph is a small local web app: a Node process reads your vault and serves the viewer to your browser. It needs [Node.js](https://nodejs.org/) 20.19 or newer and nothing else.
+You need [Node.js](https://nodejs.org/) 20.19 or newer.
 
 ```bash
 npx github:mfoll/brain-graph ~/path/to/vault
 ```
 
-The first run builds the app (about a minute); later runs start in a second. The folder is optional: without one, Brain Graph serves the vaults registered in Tolaria plus the folders you add in the app. Options: `--port 5178`, `--no-open`.
+The first run builds the app, which takes about a minute. Then open <http://localhost:5178>. Without a folder argument, Brain Graph lists the vaults you have opened in Tolaria plus any folder you add in the app. Options: `--port 5178`, `--no-open`.
 
-To keep it around, install it once and run it by name:
+To install it as a command:
 
 ```bash
 npm install -g github:mfoll/brain-graph
 brain-graph ~/path/to/vault
 ```
 
-Then open <http://localhost:5178>. Asking a coding agent to install it works too: [AGENTS.md](AGENTS.md) holds the recipe, the boundaries and the commands an agent can use. The viewer does not write to the vault. Its own files live in `~/.config/brain-graph/`: `vaults.json` (the vault list) and `layouts/` (one saved map per vault, with a backup).
+Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list and one saved layout per vault. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
 
-## Everyday use
+## Using it
 
-- **Switch vaults** with the dropdown at the top left. **Manage vaults…** adds a folder by path, removes one, and chooses whether to include the vaults registered in Tolaria (read from its registry when present). Each vault keeps its own map, filters and grouping; only the selected vault is read.
-- **Find notes** with the search box: Enter jumps to a single match and focuses all of them when there are several, like a group. Or follow a link from Tolaria or a report with the URL form above.
-- **Keep a view** you come back to (say, open Questions with regions off) with Save current view… in the state line; the Default view entry resets everything.
-- **Read a cluster** by clicking its group in Explore, or a Type facet such as Project → Active. Escape unfocuses, then closes the panel.
-- **Review the hierarchy** by focusing Unassigned, opening a suspect note and reading its **why?** chain, then fixing `belongs_to` in Tolaria or with your agent. Turn on missing link targets to catch broken wikilinks the same way. The map rebuilds on save.
-- **Tune the picture** in Settings: pick which types act as groups, raise the structure-over-lateral ratio to tighten clusters, lower link opacity on dense vaults, or hide a noisy relationship kind in Explore → Links. Slider changes run a short layout update so the effect is visible at once.
+- **Switch vaults** from the menu at the top left. **Manage vaults…** adds or removes folders.
+- **Search** with the box in the header. Enter opens a single match, or lights all of them.
+- **Focus a group** by clicking it in Explore → Groups. Press Escape to unfocus, and again to close the panel.
+- **Check the hierarchy**: focus Unassigned, open a note, and read its **why?** line. Fix its `belongs_to` in Tolaria and the map updates.
+- **Adjust the picture** in Settings: Grouping decides what forms a group, Layout how tight the map is, Appearance the colours and labels, Filters what is shown.
 
 ## Vault conventions
 
-The defaults follow Tolaria and the Second Brain template; each is a per-vault setting.
+The defaults follow Tolaria and the Second Brain template.
 
-| Convention | Default | Where to change it |
+| Convention | Default | Change it in |
 | --- | --- | --- |
-| Group types, in shape order | Project, Responsibility, Topic (Paper, Grant for an archive whose links point to them) | Settings → Grouping |
-| Child → parent links | `belongs_to`, `parent_*` keys | Settings → Grouping → Link roles (↑) |
-| Parent → children links, followed only as a fallback | `has` | Link roles (↓) and the fallback checkbox |
-| Lateral links | `related_to`, `surface_for`, body wikilinks, every other key | Link roles (↔) |
-| Root types, whose link to another type is context rather than a parent, except a link to a flagged root | Responsibility | `rootTypes` in the home settings (no UI yet) |
-| Topics allowed to root an area | `hierarchy_root: true` on the Topic | the vault's frontmatter |
-| Two parents at the same distance accepted, not reported | `accepted_double_parent: true` on the note | the vault's frontmatter |
-| Outside the hierarchy: no group, not unassigned either, drawn in a pale neutral | Recap, Guide, Type, Operation, types whose `Type` note has `hierarchy_exempt: true`, archived notes, Inbox notes with no group (`_organized: false` or `status: Unprocessed`) | Settings → Grouping → Outside the hierarchy (types); the flags are read from the notes |
-| Parentless notes coloured by their first lateral link to a group (marked "related" on hover), or else outside | Person | `lateralHomeTypes` (no UI yet) |
-| Type colours when no groups exist | `_color` on `type: Type` notes | the vault's Type notes |
+| Group types | Project, Responsibility, Topic, or the most linked-to types when a vault has none of these | Settings → Grouping |
+| Parent links | `belongs_to`, `parent_*` | Settings → Grouping → Link roles |
+| Children links, used only when a note has no parent link | `has` | Settings → Grouping |
+| Other links | `related_to`, `surface_for`, links in the text, any other key | Settings → Grouping → Link roles |
+| Types never placed in a group | Recap, Guide, Operation, Type, and types flagged `hierarchy_exempt: true` | Settings → Grouping → Outside the hierarchy |
+| Notes never placed in a group | archived notes, and Inbox notes (`_organized: false` or `status: Unprocessed`) | frontmatter |
+| Topics that may head an area | `hierarchy_root: true` | frontmatter |
+| Notes allowed two parents | `accepted_double_parent: true` | frontmatter |
+| Root type | Responsibility | code only (`rootTypes`) |
+| People with no parent | coloured by their first related group | code only (`lateralHomeTypes`) |
 | Archived notes | `_archived: true` or `archived: true` | Settings → Filters |
-| Deep links | `tolaria://<slug>/<path>.md`, slug from the vault label | `VAULT_SLUG` |
-| Links to other vaults | a frontmatter value that is a relative path to a note (or folder note) of exactly one other registered vault and of no note here | detected, nothing to set |
+| Colours when a vault has no groups | `_color` on `type: Type` notes | the Type notes |
+| Tolaria links | `tolaria://<slug>/<path>.md`, slug from the vault name | `VAULT_SLUG` |
 
-The `has` fallback exists because vaults often use `has` for selective entry points rather than ownership, so following it first would pull notes into the wrong group. The root, exempt and Person rules follow the template's hierarchy contract (its ADR on `belongs_to` roots), so the viewer and the template's [hierarchy audit](https://github.com/mfoll/second-brain-template) agree on homes; the `graph:homes` command below prints what the viewer infers, from the same code.
+`has` comes second because vaults often use it to list highlights rather than members. These rules match the template's hierarchy audit, so `pnpm graph:homes` and the template's lint report the same warnings.
 
 ## Development
 
 ```bash
 git clone https://github.com/mfoll/brain-graph && cd brain-graph
 pnpm install
-VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev   # Vite dev server with hot reload on :5178
+VAULT=~/path/to/vault VAULT_LABEL="Name" pnpm dev   # dev server with hot reload on port 5178
 ```
-
-`pnpm build` produces `dist/` (the app plus the compiled server), which `bin/brain-graph.mjs` serves; `pnpm start -- ~/path/to/vault` runs that CLI from the checkout. Set `VAULT_SLUG` if the Tolaria deep-link slug differs from the slugified label.
 
 ```bash
 pnpm typecheck
+pnpm build                                # app and server into dist/, served by bin/brain-graph.mjs
+pnpm start -- ~/path/to/vault             # run the built CLI from the checkout
 pnpm graph:dump ~/my-vault -- --summary   # parser statistics and unresolved links
-pnpm graph:homes ~/my-vault               # the inferred group hierarchy plus audit lists
-                                          # (--no-has, --hubs=Project,Topic, --json)
+pnpm graph:homes ~/my-vault               # the group hierarchy and its problems
 ```
 
-`graph:homes` prints the hierarchy the viewer infers and four audit lists matching the template audit's warnings: active Projects with no parent or whose parent is an unflagged Topic, notes with several parents at the same distance, notes homed only through a `has` link, and notes with no group at all. The flagged exceptions (`hierarchy_root`, `accepted_double_parent`, parentless Persons) follow as info lines, then a `SUMMARY` line in the audit's format. It is meant as input for reorganising `belongs_to`; the viewer itself never writes.
+`graph:homes` prints the group tree and lists Projects without a proper parent, notes with two parents, notes reached only through `has`, and notes with no group, followed by a summary line. Add `--json` for machine-readable output.
 
-Issues and pull requests are welcome. Keep vault assumptions configurable rather than hard-coded, and run `pnpm typecheck` before opening a pull request.
+Issues and pull requests are welcome. Keep vault conventions configurable, and run `pnpm typecheck` first.
 
-## How it works
+### Code layout
 
-- `server/vault.ts` walks the vault (skipping dot-folders), parses frontmatter with `yaml`, extracts the H1, first paragraph, Type metadata and all wikilinks, and resolves link targets (root stems, folder-path stems, `|alias` and `#anchor` forms).
-- `server/api.ts` is a framework-free HTTP API: vault registry, parsed graph, note text and assets, saved layouts, and change events over Server-Sent Events (`chokidar` watches the folder). The Vite plugin mounts it in development; `bin/brain-graph.mjs` serves it next to the built app.
-- `src/` is React 19 + TypeScript on Vite 8. Rendering uses [Sigma.js](https://www.sigmajs.org/) 4 with [Graphology](https://graphology.github.io/): the declarative styles API maps attributes to colour and size, and node and edge *state* (`isHidden`, `isHighlighted`, `isSelected`) drives filtering and hover emphasis without mutating the graph. Regions are a 2D canvas layer behind the WebGL stage; names are drawn on a layer in front.
-- `src/graph/home.ts` assigns each note to its group: strongest child → parent links first, parent → children links as a fallback, with the path recorded so the panel can explain it.
-- Layout is graphology's ForceAtlas2 run synchronously a few iterations per frame with a cooling schedule, on a private copy of the positions at the physics' natural scale; every frame the displayed map receives a copy normalised to a fixed extent. The frame therefore never moves, which matters because Sigma scales node sizes with the frame: a frame that followed the map made nodes shrink during a run and snap back at its end. Saved maps are comparable and **Fit** is a smooth camera move. A worker-based layout was tried and dropped: its adaptive speed cancelled the damping.
+- `server/vault.ts` reads the vault: frontmatter, titles, first paragraphs and wikilinks.
+- `server/api.ts` serves the graph, note text, saved layouts and change events. The Vite plugin uses it in development and `bin/brain-graph.mjs` in the CLI.
+- `src/graph/home.ts` decides each note's group.
+- `src/graph/build.ts` builds the graph and its colours; `src/graph/hulls.ts` draws regions and names.
+- `src/components/` holds the React interface. Rendering uses [Sigma.js](https://www.sigmajs.org/) 4 and [Graphology](https://graphology.github.io/), with ForceAtlas2 for the layout.
 
 ## Related tools
 
-| Tool | What it is | Relation |
-| --- | --- | --- |
-| [Tolaria](https://tolaria.md/) ([source](https://github.com/refactoringhq/tolaria)) | Local-first desktop app for Markdown vaults with typed notes and relationships, Git sync and an MCP server for agents. | The viewer Brain Graph is built for: same files, same conventions, deep links back into it. Tolaria has no graph view and no plugin system yet. |
-| [Portent](https://github.com/refactoringhq/portent) | Refactoring's open specification for portable knowledge bases: core types, relationships and lifecycle. | Supplies the vocabulary Brain Graph reads: `type`, `belongs_to`, `has`, `related_to`. |
-| [Second Brain template](https://github.com/mfoll/second-brain-template) | A Portent vault template with agent operating rules, Procedures, ADRs and lint audits, including a `belongs_to` hierarchy contract. | Brain Graph is its visual companion: the grouping rules match the template's hierarchy contract, and the audit views and `graph:homes` feed its lint and health review. |
-| [Obsidian graph view](https://obsidian.md/help/plugins/graph) | The built-in graph of an Obsidian vault, based on body links. | Zero-setup fallback for any Markdown folder, without frontmatter relationships, types or hierarchy. |
-| [Quartz](https://quartz.jzhao.xyz/), [Foam](https://foambubble.github.io/) | A static-site generator and a VS Code extension, each with a link graph. | Need their own build or editor and read body links only. |
+| Tool | Notes |
+| --- | --- |
+| [Tolaria](https://tolaria.md/) ([source](https://github.com/refactoringhq/tolaria)) | The desktop app Brain Graph is built for. It reads the same files and opens notes from Brain Graph's links. |
+| [Portent](https://github.com/refactoringhq/portent) | The open specification behind the note types and relationships. |
+| [Second Brain template](https://github.com/mfoll/second-brain-template) | A vault template with agent instructions and lint checks. Brain Graph follows its hierarchy rules. |
+| [Obsidian graph view](https://obsidian.md/help/plugins/graph) | Works on any Markdown folder but uses only links in the text, not frontmatter relationships. |
+| [Quartz](https://quartz.jzhao.xyz/), [Foam](https://foambubble.github.io/) | Link graphs that need their own site build or editor. |
 
 ## Status
 
-Working and in daily use since October 2026 on a 1,300-note vault. Vaults are shown one at a time; the archive-records toggle is the only cross-vault view. The Tolaria deep-link slug is inferred from the vault label rather than read from Tolaria's registry.
+In daily use since October 2026 on a 1,300-note vault. One vault is shown at a time; notes from other vaults appear only where this vault links to them. The Tolaria slug is derived from the vault name.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Brain Graph is an independent project and is not affiliated with Tolaria or Refactoring.
+MIT, see [LICENSE](LICENSE). Brain Graph is not affiliated with Tolaria or Refactoring.
