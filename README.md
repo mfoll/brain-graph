@@ -6,6 +6,33 @@ An interactive map of a Markdown vault whose notes have a `type` and link to eac
 
 *An agent answering "What is blocking the MRD manuscript revision?" in the demo vault: the notes it reads glow blue, the note it writes glows orange.*
 
+## Screenshots
+
+All screenshots come from the same fictional demo vault of a cancer genomics lab.
+
+![The whole demo vault zoomed out: about 790 notes in coloured project regions, each with its name](docs/screenshot-overview.webp)
+
+*The whole vault. Each region is a project, responsibility or topic, and every note takes the colour of its nearest group.*
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshot-note.webp" alt="A manuscript note open in the right panel, with its linked notes highlighted on the map"></td>
+    <td width="50%"><img src="docs/screenshot-focus.webp" alt="A project focused on the map, with its members listed in the right panel"></td>
+  </tr>
+  <tr>
+    <td><b>Read a note.</b> The panel shows the note text. Its links light up on the map, and wikilinks in the text jump to other notes.</td>
+    <td><b>Focus a group.</b> Click a project in the tree to fade everything else. The Members tab lists every note it holds.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshot-settings.webp" alt="The Settings tab: which types form groups, which stay outside the hierarchy, which link kinds are shown, and layout sliders"></td>
+    <td><img src="docs/screenshot-dark.webp" alt="The same map in the dark theme"></td>
+  </tr>
+  <tr>
+    <td><b>Settings.</b> Choose which types form groups, which link kinds to show, and how strongly parents pull. Settings are kept per vault.</td>
+    <td><b>Dark theme.</b> It follows the system setting, or the moon button.</td>
+  </tr>
+</table>
+
 ## Why
 
 [Portent](https://github.com/refactoringhq/portent), the specification Tolaria follows, gives each note a `type` and typed relationships: `belongs_to` points to a parent, `has` lists highlights, `related_to` links sideways. Tolaria shows these relationships one note at a time. It has no graph view ([refactoringhq/tolaria#587](https://github.com/refactoringhq/tolaria/issues/587)) and no plugin system yet ([#1046](https://github.com/refactoringhq/tolaria/issues/1046)).
