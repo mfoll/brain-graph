@@ -52,7 +52,7 @@ export const isStructureKind = (kind: string, settings?: Pick<HomeSettings, "rol
 export const PALETTES = {
   vivid: { label: "Vivid", colors: ["#3b82f6", "#f97316", "#10b981", "#a855f7", "#eab308", "#ec4899", "#06b6d4", "#84cc16", "#6366f1", "#ef4444", "#22c55e", "#d946ef", "#0ea5e9", "#f59e0b", "#f43f5e", "#14b8a6"] },
   tableau: { label: "Tableau 10", colors: ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"] },
-  okabe: { label: "Okabe–Ito (colour-blind safe)", colors: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#d55e00", "#56b4e9", "#f0e442", "#999999"] },
+  okabe: { label: "Okabe–Ito (colour-blind safe)", colors: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#d55e00", "#56b4e9", "#f0e442"] }, // its grey (#999999) is left out: it read as an unassigned note
   pastel: { label: "Pastel", colors: ["#8da0cb", "#fc8d62", "#66c2a5", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#80b1d3", "#fb8072", "#bebada", "#fdb462"] },
   earth: { label: "Earth", colors: ["#8c510a", "#35978f", "#bf812d", "#01665e", "#dfc27d", "#80cdc1", "#543005", "#003c30", "#c7eae5", "#f6e8c3", "#7f3b08", "#2d004b"] },
   nord: { label: "Nord", colors: ["#5e81ac", "#d08770", "#a3be8c", "#b48ead", "#ebcb8b", "#bf616a", "#88c0d0", "#81a1c1", "#8fbcbb", "#d8dee9"] },
@@ -108,7 +108,6 @@ export interface Hub {
   /** Notes whose nearest home is exactly this hub. */
   directCount: number;
   depth: number; // 0 = root
-  color: string;
 }
 
 export interface NoteHome {
@@ -236,7 +235,7 @@ export function buildHomeIndex(data: VaultGraph, settings: HomeSettings): HomeIn
   const hubs = new Map<string, Hub>();
   for (const n of data.nodes) {
     if (!settings.hubTypes.has(n.type ?? "")) continue;
-    hubs.set(n.id, { id: n.id, title: n.title, type: n.type!, parent: null, children: [], subtreeCount: 0, directCount: 0, depth: 0, color: UNHOMED });
+    hubs.set(n.id, { id: n.id, title: n.title, type: n.type!, parent: null, children: [], subtreeCount: 0, directCount: 0, depth: 0 });
   }
   for (const h of hubs.values()) {
     const p = homes.get(h.id)?.hub;
@@ -274,7 +273,6 @@ export function buildHomeIndex(data: VaultGraph, settings: HomeSettings): HomeIn
   roots.forEach((r) => walkDepth(r.id, 0));
   index.roots = roots.map((r) => r.id);
   index.palettes = [0, 1, 2].map((level) => hubPalette(index, level as HomeLevel));
-  for (const h of hubs.values()) h.color = index.palettes[1].get(h.id) ?? UNHOMED;
   return index;
 }
 

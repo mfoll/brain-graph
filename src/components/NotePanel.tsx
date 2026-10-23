@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { NoteNode, VaultGraph } from "../types";
 import { NoteReader } from "./NoteReader";
-import type { BrainGraph } from "../graph/build";
+import { groupColor, type BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
-import { SHAPE_GLYPH, acceptsDoubleParent, homeChain, outsideReason, shapeFor, subtreeMembers, type HomeIndex } from "../graph/home";
+import { SHAPE_GLYPH, acceptsDoubleParent, homeChain, outsideReason, shapeFor, subtreeMembers, type HomeIndex, type HomeLevel } from "../graph/home";
 
 interface Props {
   data: VaultGraph;
@@ -11,6 +11,8 @@ interface Props {
   node: NoteNode;
   typeColors: Map<string, string>;
   homeIndex: HomeIndex;
+  /** Colour level, so breadcrumbs take the colours drawn on the map. */
+  level: HomeLevel;
   onSelect: (id: string) => void;
   onClose: () => void;
   /** Active tab, owned by the app so back and forward can restore it. */
@@ -31,7 +33,7 @@ export function deepLink(data: VaultGraph, id: string): string {
 
 export type PanelTab = "note" | "links" | "members";
 
-export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, onClose, canBack, canForward, onBack, onForward, tab: wanted, onTab }: Props) {
+export function NotePanel({ data, graph, node, typeColors, homeIndex, level, onSelect, onClose, canBack, canForward, onBack, onForward, tab: wanted, onTab }: Props) {
   const typeColor = typeColors.get(typeName0(node));
   const chain = homeChain(node, homeIndex).filter((id) => id !== node.id).reverse(); // root first
   const noteHome = homeIndex.homes.get(node.id);
@@ -136,7 +138,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, onSelect, 
           {chain.map((id, i) => (
             <span key={id}>
               {i > 0 && <span className="muted"> › </span>}
-              <button className="link" onClick={() => onSelect(id)} style={{ color: homeIndex.hubs.get(id)?.color }}>
+              <button className="link" onClick={() => onSelect(id)} style={{ color: groupColor(homeIndex, id, level) }}>
                 {homeIndex.hubs.get(id)?.title ?? id}
               </button>
             </span>

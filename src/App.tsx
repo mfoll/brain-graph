@@ -997,6 +997,7 @@ export default function App() {
           node={selectedNode}
           typeColors={typeColors}
           homeIndex={homeIndex}
+          level={homeLevel}
           onSelect={(id) => select(id, true)}
           onClose={() => setSelected(null)}
           tab={panelTab}

@@ -6,7 +6,7 @@ import { DEFAULT_PALETTE, OUTSIDE_COLOR, PALETTES, SHAPE_GLYPH, defaultLinkRole,
 const ROLE_LABEL: Record<LinkRole, string> = { up: "→ parent", down: "→ children", lateral: "lateral" };
 const ROLE_GLYPH: Record<LinkRole, string> = { up: "↑", down: "↓", lateral: "↔" };
 const NEXT_ROLE: Record<LinkRole, LinkRole> = { lateral: "up", up: "down", down: "lateral" };
-import { DEFAULT_LAYOUT, type LayoutSettings } from "../graph/build";
+import { DEFAULT_LAYOUT, groupColor, type LayoutSettings } from "../graph/build";
 
 export interface Filters {
   types: Set<string>; // visible types
@@ -244,7 +244,7 @@ export function Sidebar(p: Props) {
             {hub.children.length ? (open ? "▾" : "▸") : ""}
           </button>
           <button className="tree-label" onClick={() => onFocusHub(id)} title={`${hub.type} · ${hub.subtreeCount} notes · click to focus this group and open its note, click again to unfocus`}>
-            <span className="glyph" style={{ color: homeIndex.palettes[homeLevel].get(id) }} title={hub.type}>
+            <span className="glyph" style={{ color: groupColor(homeIndex, id, homeLevel) }} title={hub.type}>
               {glyphFor(hub.type)}
             </span>
             <span className="name">{hub.title}</span>
