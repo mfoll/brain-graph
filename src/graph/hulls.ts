@@ -1,6 +1,6 @@
 import type Sigma from "sigma";
 import type { VaultGraph } from "../types";
-import type { BrainGraph } from "./build";
+import { groupColor, type BrainGraph } from "./build";
 import { anchorAt, homeChain, isStructureKind, type HomeIndex, type HomeLevel } from "./home";
 
 export interface HullOptions {
@@ -98,7 +98,6 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     (strokes.get(g1) ?? strokes.set(g1, []).get(g1)!).push([p1, p2]);
   });
 
-  const palette = opts.index.palettes[opts.level];
   const off = (drawHulls as unknown as { _off?: HTMLCanvasElement })._off ?? document.createElement("canvas");
   (drawHulls as unknown as { _off?: HTMLCanvasElement })._off = off;
   off.width = back.width;
@@ -114,7 +113,7 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   const ordered = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
   for (const [anchor, pts] of ordered) {
     if (pts.length < 2) continue;
-    const color = palette.get(anchor) ?? "#888";
+    const color = groupColor(opts.index, anchor, opts.level);
     octx.fillStyle = color;
     octx.strokeStyle = color;
     octx.lineCap = "round";

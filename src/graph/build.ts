@@ -1,8 +1,8 @@
 import Graph from "graphology";
 import { circular } from "graphology-layout";
-import type { VaultGraph } from "../types";
+import type { NoteNode, VaultGraph } from "../types";
 import { GHOST_COLOR, UNTYPED_COLOR, normalizeColor } from "./colors";
-import { homeColor, isStructureKind, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
+import { anchorAt, homeChain, homeColor, isStructureKind, shapeFor, type HomeIndex, type HomeLevel, type HomeSettings } from "./home";
 
 export interface NodeAttrs {
   label: string;
@@ -64,6 +64,21 @@ export function applyEdgeWeights(graph: BrainGraph, ratioInput: number, settings
  * Colour comes from the home grouping; when the vault has no group notes at all, the Type colours
  * from its Type notes are used instead so the graph is never uniformly grey.
  */
+/**
+ * The colour a group is drawn in at a colour level: that of the group it rolls up to at that level, so
+ * every note, region and name inside one coloured group shares one colour. At "nearest group" each
+ * group keeps its own colour, a shade of its parent's hue.
+ */
+export function groupColor(index: HomeIndex, hubId: string, level: HomeLevel): string {
+  return index.palettes[level].get(level === 2 ? hubId : anchorAt(index, hubId, level)) ?? "#8b8f98";
+}
+
+/** A note's map colour: its group's colour at this level; homeColor decides for notes with no group. */
+function noteColor(note: NoteNode, index: HomeIndex, level: HomeLevel): string {
+  const chain = homeChain(note, index);
+  return chain.length ? groupColor(index, chain[0], level) : homeColor(note, index, level);
+}
+
 export function applyColors(graph: BrainGraph, level: HomeLevel, index: HomeIndex): void {
   const byId = index.byId;
   const noGroups = index.hubs.size === 0;
@@ -73,10 +88,10 @@ export function applyColors(graph: BrainGraph, level: HomeLevel, index: HomeInde
     if (a.bridge) {
       // A bridge takes the colour of the note that points at it and keeps its rectangle.
       const via = byId.get(a.bridge.via);
-      return { ...a, color: via && !noGroups ? homeColor(via, index, level) : a.typeColor, shape: "rectangle" };
+      return { ...a, color: via && !noGroups ? noteColor(via, index, level) : a.typeColor, shape: "rectangle" };
     }
     if (noGroups || !note) return { ...a, color: a.typeColor, shape };
-    return { ...a, color: homeColor(note, index, level), shape };
+    return { ...a, color: noteColor(note, index, level), shape };
   }, { attributes: ["color", "shape"] });
 }
 
