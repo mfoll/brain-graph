@@ -105,7 +105,9 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
   octx.clearRect(0, 0, width, height);
 
-  const labels: { x: number; y: number; text: string; color: string; n: number }[] = [];
+  const labels: { x: number; y: number; text: string; color: string; n: number; pts: (Pt & { r: number })[] }[] = [];
+  // Dev-only trace of why each group's name is or is not drawn (read as window.__hullNames).
+  const trace: { name: string; n: number; why: string }[] = [];
   // Largest groups first so small groups stay visible on top of big ones.
   const ordered = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
   for (const [anchor, pts] of ordered) {
@@ -128,13 +130,17 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
       octx.arc(p.x, p.y, p.r + pad, 0, Math.PI * 2);
     }
     octx.fill();
+    if (pts.length < 4 && anchor !== opts.emphasis) trace.push({ name: opts.index.hubs.get(anchor)?.title ?? anchor, n: pts.length, why: "fewer than 4 visible notes" });
     if (pts.length >= 4 || anchor === opts.emphasis) {
       // At the median of the visible members; a name whose place is off-screen is simply not drawn
       // (clamping it to the edge put names far from their group when zoomed in).
       const x = median(pts.map((p) => p.x));
       const y = median(pts.map((p) => p.y));
-      if (x < 0 || x > width || y < 0 || y > height) continue;
-      labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: anchor === opts.emphasis ? Infinity : pts.length });
+      if (x < 0 || x > width || y < 0 || y > height) {
+        trace.push({ name: opts.index.hubs.get(anchor)?.title ?? anchor, n: pts.length, why: "off-screen" });
+        continue;
+      }
+      labels.push({ x, y, text: opts.index.hubs.get(anchor)?.title ?? anchor, color, n: anchor === opts.emphasis ? Infinity : pts.length, pts });
     }
   }
 
@@ -150,9 +156,10 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
   fctx.textAlign = "center";
   fctx.textBaseline = "middle";
   fctx.lineJoin = "round";
-  // Largest groups are placed first. A name that would overlap an already placed one is nudged one
-  // line up or down before being given up, so a name never strays far from its group; the emphasised
-  // group is never given up.
+  // Largest groups are placed first. A name that would overlap an already placed one tries other spots
+  // around its median (up to three lines up or down, half its width left or right), then on each of its
+  // own notes, but only spots whose centre lies on its own region, so it never strays from its group;
+  // the emphasised group is never given up.
   const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
   const overlaps = (b: { x0: number; y0: number; x1: number; y1: number }) => placed.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
   for (const l of labels.sort((a, b) => b.n - a.n)) {
@@ -163,18 +170,25 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     const w = fctx.measureText(l.text).width + 12;
     const h = size * 0.75;
     const step = size * 1.5;
+    const onRegion = (cx: number, cy: number) => l.pts.some((q) => Math.hypot(q.x - cx, q.y - cy) <= q.r + pad * 1.5);
     let box = { x0: l.x - w / 2, y0: l.y - h, x1: l.x + w / 2, y1: l.y + h };
     let ok = !overlaps(box);
-    for (const dy of ok ? [] : [step, -step]) {
-      const cand = { x0: l.x - w / 2, y0: l.y + dy - h, x1: l.x + w / 2, y1: l.y + dy + h };
-      if (!overlaps(cand)) {
-        box = cand;
-        l.y += dy;
-        ok = true;
-        break;
-      }
+    const tries: [number, number][] = [];
+    for (let k = 1; k <= 3; k++) for (const dy of [k * step, -k * step]) for (const dx of [0, -w / 2, w / 2]) tries.push([dx, dy]);
+    // Then on each of the group's own notes, nearest to the median first.
+    for (const q of [...l.pts].sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))) tries.push([q.x - l.x, q.y - l.y]);
+    for (const [dx, dy] of ok ? [] : tries) {
+      const cx = l.x + dx, cy = l.y + dy;
+      const cand = { x0: cx - w / 2, y0: cy - h, x1: cx + w / 2, y1: cy + h };
+      if (cy - h < 0 || cy + h > height || !onRegion(cx, cy) || overlaps(cand)) continue;
+      box = cand;
+      l.x = cx;
+      l.y = cy;
+      ok = true;
+      break;
     }
     if (!ok && !Number.isFinite(l.n)) ok = true; // emphasised: draw anyway
+    trace.push({ name: l.text, n: l.n, why: ok ? "drawn" : "collides with a larger group's name" });
     if (!ok) continue;
     placed.push(box);
     fctx.lineWidth = Math.max(4, size / 3);
@@ -184,4 +198,5 @@ export function drawHulls(sigma: Sigma, graph: BrainGraph, back: HTMLCanvasEleme
     fctx.fillText(l.text, l.x, l.y);
   }
   fctx.globalAlpha = 1;
+  if (import.meta.env.DEV) (window as unknown as { __hullNames?: unknown }).__hullNames = trace;
 }
