@@ -20,6 +20,11 @@ function useTheme() {
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
+    // The title bar of an installed app (Safari's Dock app, Chrome's app window) follows the header colour.
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+      m.removeAttribute("media");
+      m.setAttribute("content", dark ? "#111827" : "#ffffff");
+    }
   }, [dark]);
   return {
     dark,
@@ -644,6 +649,13 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [filters.spotlight, selected]);
+
+  // Window title: the open note, then the vault, so a tab, the Window menu or an installed app names what is shown.
+  useEffect(() => {
+    if (!data) return;
+    const note = selected ? byId.get(selected)?.title : null;
+    document.title = [note, data.vault.label, "Brain Graph"].filter(Boolean).join(" · ");
+  }, [data, selected, byId]);
 
   // Shareable URL: vault, selected note, focus and roll-up level.
   useEffect(() => {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brain Graph is not running</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <style>
+      :root { color-scheme: light dark; --bg: #f8fafc; --fg: #111827; --muted: #6b7280; --panel: #ffffff; --border: #e5e7eb; --accent: #2563eb; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #0b0f17; --fg: #e5e7eb; --muted: #9ca3af; --panel: #111827; --border: #1f2937; --accent: #60a5fa; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg); font: 15px/1.5 Inter, system-ui, sans-serif; }
+      main { max-width: 480px; padding: 32px; text-align: center; }
+      img { width: 72px; height: 72px; }
+      h1 { font-size: 20px; margin: 16px 0 8px; }
+      p { color: var(--muted); margin: 8px 0; }
+      code { display: block; margin: 16px 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); font-size: 13px; text-align: left; overflow-x: auto; white-space: nowrap; }
+      button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icon.svg" alt="" />
+      <h1>Brain Graph is not running</h1>
+      <p>Start it in a terminal, then this page reloads by itself:</p>
+      <code>npx github:mfoll/brain-graph ~/path/to/vault</code>
+      <p><button onclick="location.reload()">Try again</button></p>
+    </main>
+    <script>
+      // Reload as soon as the server answers.
+      setInterval(() => fetch("/api/vaults", { cache: "no-store" }).then((r) => r.ok && location.reload()).catch(() => {}), 3000);
+    </script>
+  </body>
+</html>

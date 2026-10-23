@@ -40,6 +40,8 @@ npm install -g github:mfoll/brain-graph
 brain-graph ~/path/to/vault
 ```
 
+To use it as an app with its own window and Dock icon, open it in Safari and choose **File → Add to Dock**, or in Chrome click the install icon in the address bar. When the server is not running, the app shows the command to start it and reloads by itself once it answers.
+
 Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and for each vault its saved layout and settings. Copy that folder to keep the same maps and settings on another machine. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
 
 ## Using it
