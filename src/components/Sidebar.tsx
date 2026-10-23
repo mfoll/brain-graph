@@ -105,7 +105,7 @@ const LEVEL_LABELS = ["Top-level groups", "Second level", "Nearest group"];
 export function Sidebar(p: Props) {
   const { data, types, homeIndex, homeSettings, homeDefaults, leafTypes, homeLevel, edgeKinds, filters, onChange, selected, onSelect, onFocusHub, unassignedCount, outsideCount, layoutSettings, onLayoutSettings } = p;
   const ls = layoutSettings;
-  const layoutIsDefault = JSON.stringify({ ...ls, nodeScale: 1 }) === JSON.stringify(DEFAULT_LAYOUT);
+  const layoutIsDefault = ls.gravity === DEFAULT_LAYOUT.gravity && ls.ratio === DEFAULT_LAYOUT.ratio; // node size is a display setting
 
   // Facets: frontmatter keys worth listing under a type. `status` always comes first when present.
   // Other keys must be shared by several types (a key used by one family of notes is that family's

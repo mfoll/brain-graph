@@ -120,8 +120,10 @@ function filtersToView(f: Filters, data: VaultGraph): RememberedView {
 /** A named view: the remembered filters plus focus and roll-up level, kept per vault in the browser. */
 type SavedView = { name: string; view: RememberedView; focus: string | null; level: HomeLevel };
 const readViews = (slug: string): SavedView[] => getSetting<SavedView[]>(slug, "views") ?? [];
-/** Link kinds hidden until shown: text links, and related_to, which is context rather than structure. */
-const DEFAULT_HIDDEN_KINDS = ["body", "related_to"];
+/** Link kinds hidden until shown: links written in the note text. */
+const DEFAULT_HIDDEN_KINDS = ["body"];
+/** Colour level when the URL names none: each note's nearest group. */
+const DEFAULT_LEVEL: HomeLevel = 2;
 
 type Spotlight = Filters["spotlight"];
 const spotlightToParam = (sp: Spotlight) => {
@@ -249,8 +251,8 @@ export default function App() {
 
   const [homeLevel, setHomeLevel] = useState<HomeLevel>(() => {
     const raw = initialUrl.get("level");
-    const v = raw === null ? 1 : Number(raw);
-    return v === 0 || v === 1 || v === 2 ? (v as HomeLevel) : 1;
+    const v = raw === null ? DEFAULT_LEVEL : Number(raw);
+    return v === 0 || v === 1 || v === 2 ? (v as HomeLevel) : DEFAULT_LEVEL;
   });
 
   const [filters, setFilters] = useState<Filters>({
@@ -614,7 +616,7 @@ export default function App() {
   const applyView = (v: SavedView | null) => {
     if (!data) return;
     setFilters((f) => ({ ...viewToFilters(f, v?.view ?? {}, data), spotlight: paramToSpotlight(v?.focus ?? null) }));
-    setHomeLevel(v?.level ?? 1);
+    setHomeLevel(v?.level ?? DEFAULT_LEVEL);
     setActiveView(v?.name ?? null);
   };
   const saveView = () => {
@@ -651,7 +653,7 @@ export default function App() {
     if (selected) q.set("note", selected);
     const sp = spotlightToParam(filters.spotlight);
     if (sp) q.set("focus", sp);
-    if (homeLevel !== 1) q.set("level", String(homeLevel));
+    if (homeLevel !== DEFAULT_LEVEL) q.set("level", String(homeLevel));
     const url = `${window.location.pathname}?${q.toString()}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
   }, [data, selected, filters.spotlight, homeLevel]);

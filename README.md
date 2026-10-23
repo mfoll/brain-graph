@@ -2,7 +2,7 @@
 
 An interactive map of a Markdown vault whose notes have a `type` and link to each other through frontmatter, as in [Tolaria](https://tolaria.md/) and the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node and each relationship a link. Notes are coloured and grouped by the Project, Responsibility or Topic they belong to. It runs locally, opens notes in Tolaria, and never writes to the vault.
 
-![A 1,300-note vault: coloured group regions, hierarchy links in orange, and the Settings tab](docs/brain-graph-second-brain.webp)
+![A 1,300-note vault coloured by nearest group, with group regions, hierarchy links in orange, and the Settings tab open](docs/brain-graph-second-brain.webp)
 
 ## Why
 
