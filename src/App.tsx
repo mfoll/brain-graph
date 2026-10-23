@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GraphView } from "./components/GraphView";
 import { NotePanel, type PanelTab } from "./components/NotePanel";
 import { Sidebar, type Filters } from "./components/Sidebar";
-import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
+import { DEFAULT_LAYOUT, applyColors, applyEdgeWeights, applyNodeScale, buildGraph, neighborhood, placeStranded, typeColorMap, type LayoutSettings, type Positions } from "./graph/build";
 import { DEFAULT_PALETTE, PALETTES, SHAPE_GLYPH, buildHomeIndex, defaultHubTypes, shapeFor, subtreeMembers, type HomeLevel, type HomeSettings, type LinkRole, type PaletteId } from "./graph/home";
 import { useSavedLayout, useVault, useVaults } from "./useVault";
 import type { VaultGraph } from "./types";
@@ -387,7 +387,11 @@ export default function App() {
       latestPositions.current = null;
       setSeed((s) => ({ positions: null, nonce: (s?.nonce ?? 0) + 1, vault: vaultSlug }));
       setFitRequest((n) => n + 1);
-    } else setLayoutRun("recompute");
+    } else {
+      // The nudge only moves notes a little; outliers far from all their links are re-placed first.
+      if (filteredGraph) for (const n of placeStranded(filteredGraph)) graph?.mergeNodeAttributes(n, { x: filteredGraph.getNodeAttribute(n, "x"), y: filteredGraph.getNodeAttribute(n, "y") });
+      setLayoutRun("recompute");
+    }
   };
 
   // Edge-kind filtering works on a copy of the graph; node filters use hidden state in the renderer.
@@ -880,7 +884,7 @@ export default function App() {
           hidden={hidden}
           selected={selected}
           layoutRunning={layoutRun !== null}
-          layoutPins={layoutPins}
+          layoutPins={layoutRun === "settle" ? layoutPins : null}
           layoutDuration={run.duration}
           layoutStart={run.start}
           layoutMaxStep={run.maxStep}

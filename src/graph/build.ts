@@ -149,6 +149,60 @@ export function collectPositions(graph: BrainGraph): Positions {
   return out;
 }
 
+/**
+ * Where a note should sit: beside the placed neighbour it is most strongly linked to (summed layout
+ * weight of all links between them, so a parent wins over lateral links). A centroid of neighbours was
+ * tried first and dropped: a note linked into two clusters landed in the empty space between them.
+ * Ghost and bridge neighbours do not count.
+ */
+function anchorPoint(graph: BrainGraph, node: string, placed: (n: string) => boolean): { x: number; y: number } | null {
+  const weight = new Map<string, number>();
+  graph.forEachEdge(node, (_e, ea, s, t) => {
+    const m = s === node ? t : s;
+    const ma = graph.getNodeAttributes(m);
+    if (m !== node && placed(m) && !ma.ghost && !ma.bridge) weight.set(m, (weight.get(m) ?? 0) + ea.weight);
+  });
+  let best: string | null = null;
+  for (const [m, w] of weight) if (!best || w > weight.get(best)!) best = m;
+  return best ? { x: graph.getNodeAttribute(best, "x"), y: graph.getNodeAttribute(best, "y") } : null;
+}
+
+/** Notes whose nearest linked note is farther than `limit`: placed before they had links, or relinked since. */
+function strandedNodes(graph: BrainGraph, limit: number): string[] {
+  const out: string[] = [];
+  graph.forEachNode((n, a) => {
+    if (a.ghost || a.bridge) return;
+    let nearest = Infinity;
+    graph.forEachNeighbor(n, (_m, ma) => {
+      if (!ma.ghost && !ma.bridge) nearest = Math.min(nearest, Math.hypot(ma.x - a.x, ma.y - a.y));
+    });
+    if (Number.isFinite(nearest) && nearest > limit) out.push(n);
+  });
+  return out;
+}
+
+/**
+ * Move stranded notes next to their strongest neighbours (a short layout run then settles them).
+ * Returns the moved ids. Used when a map is restored and before "Update layout", whose small step
+ * cap could otherwise never bring a far outlier back.
+ */
+export function placeStranded(graph: BrainGraph, also: string[] = []): string[] {
+  const ext = robustExtent(graph);
+  if (!ext) return [];
+  const span = ext.span || 100;
+  const moved = new Set([...also, ...strandedNodes(graph, span * 0.15)]);
+  const placed = (n: string) => !moved.has(n);
+  for (const n of moved) {
+    const p = anchorPoint(graph, n, placed);
+    if (!p) continue;
+    // A small random offset so siblings placed beside the same parent do not overlap.
+    const angle = Math.random() * Math.PI * 2;
+    const r = span * (0.01 + Math.random() * 0.015);
+    graph.mergeNodeAttributes(n, { x: p.x + Math.cos(angle) * r, y: p.y + Math.sin(angle) * r });
+  }
+  return [...moved].filter((n) => anchorPoint(graph, n, () => true));
+}
+
 export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGraph {
   const colors = typeColorMap(data);
   const graph: BrainGraph = new Graph({ multi: true, type: "directed", allowSelfLoops: false });
@@ -232,25 +286,14 @@ export function buildGraph(data: VaultGraph, saved?: Positions | null): BuiltGra
     if (applied > 0) {
       cx /= applied; cy /= applied;
       const radius = Math.max(maxX - minX, maxY - minY) / 2 || 100;
-      // Place new notes at the centroid of their already-placed neighbours (with a small jitter),
-      // or on a ring around the map when nothing connects them yet.
-      const freshSet = new Set(fresh);
+      // Notes with no links yet wait on a ring around the map; once linked, placeStranded brings them in.
       fresh.forEach((node, i) => {
-        let sx = 0, sy = 0, k = 0;
-        graph.forEachNeighbor(node, (m, ma) => {
-          if (!freshSet.has(m)) { sx += ma.x; sy += ma.y; k++; }
-        });
-        const jitter = radius * 0.02;
-        if (k > 0) {
-          graph.mergeNodeAttributes(node, {
-            x: sx / k + (Math.random() - 0.5) * jitter,
-            y: sy / k + (Math.random() - 0.5) * jitter,
-          });
-        } else {
-          const angle = (i / Math.max(1, fresh.length)) * Math.PI * 2;
-          graph.mergeNodeAttributes(node, { x: cx + Math.cos(angle) * radius * 1.05, y: cy + Math.sin(angle) * radius * 1.05 });
-        }
+        const angle = (i / Math.max(1, fresh.length)) * Math.PI * 2;
+        graph.mergeNodeAttributes(node, { x: cx + Math.cos(angle) * radius * 1.05, y: cy + Math.sin(angle) * radius * 1.05 });
       });
+      // New notes go next to their strongest neighbours; notes stranded far from every neighbour
+      // (placed before they had links) are brought back the same way, and both get the settling run.
+      for (const n of placeStranded(graph, fresh)) if (!fresh.includes(n)) fresh.push(n);
     }
   }
   const restored = applied >= graph.order / 2;
