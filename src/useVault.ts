@@ -28,29 +28,43 @@ export function useVaults() {
     if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
     setRegistry(body);
   };
-  useEffect(() => {
+  const refresh = () =>
     fetch("/api/vaults")
       .then(apply)
       .catch((e) => setError(String(e)));
+  // Listed again whenever the window comes back, so vaults moved or renamed meanwhile are up to date.
+  useEffect(() => {
+    void refresh();
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
   const addVault = (path: string, label?: string) => fetch("/api/vaults", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, label }) }).then(apply);
   const removeVault = (path: string) => fetch(`/api/vaults?path=${encodeURIComponent(path)}`, { method: "DELETE" }).then(apply);
   const setUseTolaria = (useTolaria: boolean) => fetch("/api/vaults", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ useTolaria }) }).then(apply);
-  return { vaults: registry?.vaults ?? null, registry, error, addVault, removeVault, setUseTolaria };
+  return { vaults: registry?.vaults ?? null, registry, error, refresh, addVault, removeVault, setUseTolaria };
 }
 
 export function useVault(slug: string | null) {
   const [data, setData] = useState<VaultGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The server no longer serves this vault (its folder was moved, renamed or deleted).
+  const [missing, setMissing] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
     setData(null);
+    setError(null);
     // Settings load with the graph, so the first render already uses them.
-    Promise.all([fetch(`/api/graph?${q(slug)}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))), loadSettings(slug)])
-      .then(([g]: [VaultGraph, void]) => !cancelled && setData(g))
+    const graph = fetch(`/api/graph?${q(slug)}`).then(async (r) => {
+      if (r.status === 404) return (setMissing(slug), null);
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${r.status}`);
+      return (await r.json()) as VaultGraph;
+    });
+    Promise.all([graph, loadSettings(slug)])
+      .then(([g]) => !cancelled && g && setData(g))
       .catch((e) => !cancelled && setError(String(e)));
     return () => {
       cancelled = true;
@@ -74,7 +88,7 @@ export function useVault(slug: string | null) {
     return () => es.close();
   }, [slug]);
 
-  return { data, error, reload: () => setVersion((v) => v + 1) };
+  return { data, error, missing, reload: () => setVersion((v) => v + 1) };
 }
 
 /** Saved node positions for one vault, stored by the dev server in a per-vault sidecar file. */

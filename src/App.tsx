@@ -155,9 +155,9 @@ const paramToSpotlight = (v: string | null): Spotlight => {
 const initialUrl = new URLSearchParams(window.location.search);
 
 export default function App() {
-  const { vaults, registry, error: vaultsError, addVault, removeVault, setUseTolaria } = useVaults();
+  const { vaults, registry, error: vaultsError, refresh: refreshVaults, addVault, removeVault, setUseTolaria } = useVaults();
   const [manageVaults, setManageVaults] = useState(false);
-  const [vaultSlug, setVaultSlugState] = useState<string | null>(() => {
+  const [wantedSlug, setVaultSlugState] = useState<string | null>(() => {
     if (initialUrl.get("vault")) return initialUrl.get("vault");
     try {
       return localStorage.getItem(VAULT_KEY);
@@ -166,10 +166,11 @@ export default function App() {
     }
   });
   const cameraStore = useRef<{ x: number; y: number; ratio: number; angle: number } | null>(null);
-  // Resolve the initial vault once the list is known: remembered choice if still served, else the default.
+  // Only a vault the server still lists is opened. A remembered or linked vault that is gone (its folder
+  // was moved, renamed or deleted) gives way to the default vault.
+  const vaultSlug = wantedSlug && vaults?.some((v) => v.slug === wantedSlug) ? wantedSlug : null;
   useEffect(() => {
-    if (!vaults?.length) return;
-    if (vaultSlug && vaults.some((v) => v.slug === vaultSlug)) return;
+    if (!vaults?.length || vaultSlug) return;
     setVaultSlugState((vaults.find((v) => v.isDefault) ?? vaults[0]).slug);
   }, [vaults, vaultSlug]);
   const setVaultSlug = (slug: string) => {
@@ -180,7 +181,11 @@ export default function App() {
       /* ignore */
     }
   };
-  const { data, error, reload } = useVault(vaultSlug);
+  const { data, error, missing, reload } = useVault(vaultSlug);
+  // The menu listed a vault the server no longer has: list again, which also switches to the default.
+  useEffect(() => {
+    if (missing) void refreshVaults();
+  }, [missing]);
   // The graph keeps at least STAGE_MIN pixels; when the window is too narrow for both panels at their
   // chosen widths, the note panel yields (its chosen width is kept and comes back when there is room).
   const STAGE_MIN = 320;
@@ -679,7 +684,15 @@ export default function App() {
     select(id);
   };
 
-  if (error || vaultsError) return <div className="status error">Could not load the vault graph: {error ?? vaultsError}</div>;
+  if (vaultsError) return <div className="status error">Could not list the vaults: {vaultsError}</div>;
+  // A vault that fails to load must not trap the page: offer the other vaults.
+  if (error)
+    return (
+      <div className="status">
+        <p className="error">Could not load this vault: {error}</p>
+        {registry && <VaultManager registry={registry} current={vaultSlug} onSelect={setVaultSlug} onAdd={addVault} onRemove={removeVault} onUseTolaria={setUseTolaria} onClose={() => undefined} />}
+      </div>
+    );
   if (vaults && vaults.length === 0 && registry)
     return (
       <div className="status">

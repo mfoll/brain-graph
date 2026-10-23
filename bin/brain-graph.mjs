@@ -56,7 +56,14 @@ if (!existsSync(path.join(dist, "index.html"))) {
 }
 
 const api = createVaultApi({ vaultPath: folders[0] ?? process.env.VAULT, vaultPaths: folders.slice(1), label: process.env.VAULT_LABEL, slug: process.env.VAULT_SLUG });
-const serveStatic = sirv(dist, { single: true, dev: false, etag: true });
+// Files under assets/ have a content hash in their name and never change. Everything else, the page
+// above all, is checked on every load, so an updated Brain Graph is picked up at the next reload.
+const serveStatic = sirv(dist, {
+  single: true,
+  dev: false,
+  etag: true,
+  setHeaders: (res, pathname) => res.setHeader("Cache-Control", pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache"),
+});
 
 const server = createServer((req, res) => {
   api

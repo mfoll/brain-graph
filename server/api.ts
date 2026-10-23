@@ -164,6 +164,7 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   })();
   let vaultsPromise: Promise<VaultInfo[]> | null = null;
   const vaults = () => (vaultsPromise ??= discoverVaults(opts));
+  const exists = (dir: string) => fs.stat(dir).then((st) => st.isDirectory(), () => false);
   const caches = new Map<string, Promise<VaultGraph>>();
   const watchers = new Map<string, ReturnType<typeof chokidar.watch>>();
   const clients = new Map<string, Set<import("node:http").ServerResponse>>();
@@ -175,13 +176,18 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   const resolveVault = async (req: import("node:http").IncomingMessage): Promise<{ info: VaultInfo; url: URL } | null> => {
     const url = new URL(req.url ?? "", "http://localhost");
     const slug = url.searchParams.get("vault");
-    const list = await vaults();
-    const info = slug ? list.find((v) => v.slug === slug) : list.find((v) => v.isDefault);
+    const find = (list: VaultInfo[]) => (slug ? list.find((v) => v.slug === slug) : list.find((v) => v.isDefault));
+    let info = find(await vaults());
+    // A vault folder can be renamed, moved or deleted while the server runs: look again before answering.
+    if (!info || !(await exists(info.path))) {
+      vaultsPromise = null;
+      info = find(await vaults());
+    }
     return info ? { info, url } : null;
   };
 
   const watch = (info: VaultInfo) => {
-    if (watchers.has(info.slug)) return;
+    if (watchers.has(info.path)) return;
     const watcher = chokidar.watch(info.path, {
       ignored: (p, stats) => {
     const base = path.basename(p);
@@ -197,11 +203,11 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
       if (note) sendActivity({ ...note, kind: "write", source: "file", time: Date.now() });
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-    caches.delete(info.slug);
+    caches.delete(info.path);
     for (const res of clients.get(info.slug) ?? []) res.write(`event: changed\ndata: ${Date.now()}\n\n`);
       }, 250);
     });
-    watchers.set(info.slug, watcher);
+    watchers.set(info.path, watcher);
   };
   // Cross-vault links need no configuration: a frontmatter value that is a relative path, names no note
   // of this vault, and names a note (or a folder's note) in exactly one other registered vault. A path
@@ -243,10 +249,12 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   };
   const graph = (info: VaultInfo) => {
     watch(info);
-    let g = caches.get(info.slug);
+    let g = caches.get(info.path);
     if (!g) {
       g = buildGraph(info.path, info.label, info.slug).then(async (data) => ({ ...data, bridges: await resolveBridges(data, await vaults()) }));
-      caches.set(info.slug, g);
+      caches.set(info.path, g);
+      // A failed parse is not kept, so the next request tries again.
+      g.catch(() => caches.get(info.path) === g && caches.delete(info.path));
     }
     return g;
   };
@@ -274,19 +282,18 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
         if (!body.path || !(await looksLikeVault(p))) return json(res, { error: "That folder does not exist or holds no Markdown notes." }, 400);
         if (!manual.vaults.some((v) => expand(v.path) === p)) manual.vaults.push({ path: p, label: body.label?.trim() || path.basename(p) });
         await writeManual(opts, manual);
-        vaultsPromise = null;
       } else if (req.method === "DELETE") {
         const url = new URL(req.url ?? "", "http://localhost");
         const p = expand(url.searchParams.get("path") ?? "");
         manual.vaults = manual.vaults.filter((v) => expand(v.path) !== p);
         await writeManual(opts, manual);
-        vaultsPromise = null;
       } else if (req.method === "PUT") {
         const body = JSON.parse(await readBody(req)) as { useTolaria?: boolean };
         if (typeof body.useTolaria === "boolean") manual.useTolaria = body.useTolaria;
         await writeManual(opts, manual);
-        vaultsPromise = null;
       }
+      // Every listing looks again, so the vault menu follows folders that were moved, renamed or deleted.
+      vaultsPromise = null;
       json(res, { vaults: await vaults(), useTolaria: manual.useTolaria, tolariaAvailable, configPath: configFile(opts) });
     } catch (err) {
       json(res, { error: String(err) }, 500);
