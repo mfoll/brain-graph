@@ -9,6 +9,7 @@ import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { getSetting, setSetting } from "./settingsStore";
 import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
+import { STATIC, apiFetch } from "./staticSite";
 
 function useTheme() {
   const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -409,7 +410,7 @@ export default function App() {
     void saved.save(positions);
   };
   const restorePreviousLayout = async () => {
-    const r = await fetch(`/api/layout/restore?vault=${encodeURIComponent(vaultSlug ?? "")}`, { method: "POST" });
+    const r = await apiFetch(`/api/layout/restore?vault=${encodeURIComponent(vaultSlug ?? "")}`, { method: "POST" });
     if (!r.ok) return;
     const l = (await r.json()) as { positions: Positions };
     latestPositions.current = null;
@@ -668,6 +669,20 @@ export default function App() {
     setActiveView(null);
   };
 
+  // Static demo only, where no agent reports to the page: replay what a session looks like. The notes
+  // linked to the open note (or to the most linked Project) pulse as reads, then the note itself as a write.
+  const replayActivity = () => {
+    if (!data || !filteredGraph) return;
+    const degree = (n: { inDegree: number; outDegree: number }) => n.inDegree + n.outDegree;
+    const projects = data.nodes.filter((n) => n.type === "Project");
+    const start = selected && byId.has(selected) ? selected : [...(projects.length ? projects : data.nodes)].sort((a, b) => degree(b) - degree(a))[0]?.id;
+    if (!start || !filteredGraph.hasNode(start)) return;
+    const reads = filteredGraph.neighbors(start).filter((id) => byId.has(id)).sort((a, b) => degree(byId.get(b)!) - degree(byId.get(a)!)).slice(0, 5);
+    [...reads.map((id) => ({ id, kind: "read" })), { id: start, kind: "write" }].forEach((step, i) =>
+      setTimeout(() => window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail: { vault: data.vault.slug, ...step, source: "demo", time: Date.now() } })), i * 900),
+    );
+  };
+
   // Escape: unfocus first, then close the panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -797,7 +812,7 @@ export default function App() {
                   {v.label}
                 </option>
               ))}
-              <option value="__manage__">Manage vaults…</option>
+              {!STATIC && <option value="__manage__">Manage vaults…</option>}
             </select>
           </label>
           <span className="muted">
@@ -850,6 +865,11 @@ export default function App() {
             {layoutRun ? `Settling… ${Math.round(layoutProgress * 100)}% · Stop` : "Update layout"}
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
+          {STATIC && (
+            <button className="button" onClick={replayActivity} title="Show how notes pulse as an agent reads them (blue) and writes one (orange), around the open note or the most linked Project">
+              Replay agent
+            </button>
+          )}
           <button
             className="button"
             disabled={exportState === "busy"}

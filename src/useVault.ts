@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { VaultGraph, VaultInfo } from "./types";
 import type { Positions } from "./graph/build";
 import { loadSettings } from "./settingsStore";
+import { STATIC, apiFetch } from "./staticSite";
 
 export interface SavedLayout {
   savedAt: string;
@@ -29,7 +30,7 @@ export function useVaults() {
     setRegistry(body);
   };
   const refresh = () =>
-    fetch("/api/vaults")
+    apiFetch("/api/vaults")
       .then(apply)
       .catch((e) => setError(String(e)));
   // Listed again whenever the window comes back, so vaults moved or renamed meanwhile are up to date.
@@ -39,9 +40,9 @@ export function useVaults() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
-  const addVault = (path: string, label?: string) => fetch("/api/vaults", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, label }) }).then(apply);
-  const removeVault = (path: string) => fetch(`/api/vaults?path=${encodeURIComponent(path)}`, { method: "DELETE" }).then(apply);
-  const setUseTolaria = (useTolaria: boolean) => fetch("/api/vaults", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ useTolaria }) }).then(apply);
+  const addVault = (path: string, label?: string) => apiFetch("/api/vaults", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, label }) }).then(apply);
+  const removeVault = (path: string) => apiFetch(`/api/vaults?path=${encodeURIComponent(path)}`, { method: "DELETE" }).then(apply);
+  const setUseTolaria = (useTolaria: boolean) => apiFetch("/api/vaults", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ useTolaria }) }).then(apply);
   return { vaults: registry?.vaults ?? null, registry, error, refresh, addVault, removeVault, setUseTolaria };
 }
 
@@ -64,7 +65,7 @@ export function useVault(slug: string | null) {
       setError(null);
     }
     // Settings load with the graph on a vault switch, so the first render already uses them.
-    const graph = fetch(`/api/graph?${q(slug)}`).then(async (r) => {
+    const graph = apiFetch(`/api/graph?${q(slug)}`).then(async (r) => {
       if (r.status === 404) return (setMissing(slug), null);
       if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${r.status}`);
       return (await r.json()) as VaultGraph;
@@ -83,7 +84,8 @@ export function useVault(slug: string | null) {
   }, [slug, version]);
 
   useEffect(() => {
-    if (!slug) return;
+    // The static demo has no server to report changes or agent activity.
+    if (!slug || STATIC) return;
     const es = new EventSource(`/api/events?${q(slug)}`);
     es.addEventListener("changed", () => setVersion((v) => v + 1));
     // Reads and writes by other apps, passed to the map as window events.
@@ -112,7 +114,7 @@ export function useSavedLayout(slug: string | null) {
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    fetch(`/api/layout?${q(slug)}`)
+    apiFetch(`/api/layout?${q(slug)}`)
       .then((r) => (r.ok ? (r.json() as Promise<SavedLayout>) : null))
       .then((l) => !cancelled && setState({ slug, layout: l }))
       .catch(() => !cancelled && setState({ slug, layout: null }));
@@ -122,14 +124,14 @@ export function useSavedLayout(slug: string | null) {
   }, [slug]);
 
   const save = async (positions: Positions) => {
-    const r = await fetch(`/api/layout?${q(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ positions }) });
+    const r = await apiFetch(`/api/layout?${q(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ positions }) });
     if (r.ok) {
       const { savedAt, hasPrevious } = (await r.json()) as { savedAt: string; hasPrevious?: boolean };
       setState({ slug, layout: { savedAt, positions, hasPrevious } });
     }
   };
   const reset = async () => {
-    await fetch(`/api/layout?${q(slug)}`, { method: "DELETE" });
+    await apiFetch(`/api/layout?${q(slug)}`, { method: "DELETE" });
     setState({ slug, layout: null });
   };
 

@@ -1,6 +1,8 @@
 // Per-vault settings (grouping, view filters, layout physics, saved views), kept by the local server in
 // ~/.config/brain-graph/settings/<vault>.json so they do not depend on one browser. Loaded with the
 // graph, read synchronously afterwards, written back shortly after each change.
+import { apiFetch } from "./staticSite";
+
 type Key = "grouping" | "view" | "layout" | "views";
 const KEYS: Key[] = ["grouping", "view", "layout", "views"];
 const cache = new Map<string, Partial<Record<Key, unknown>>>();
@@ -13,11 +15,11 @@ const put = (slug: string, keys: Iterable<Key> = dirty.get(slug) ?? []) => {
   const all = cache.get(slug) ?? {};
   const body = Object.fromEntries([...keys].map((k) => [k, all[k]]));
   dirty.delete(slug);
-  return fetch(`/api/settings?vault=${encodeURIComponent(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => undefined);
+  return apiFetch(`/api/settings?vault=${encodeURIComponent(slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => undefined);
 };
 
 export async function loadSettings(slug: string): Promise<void> {
-  const r = await fetch(`/api/settings?vault=${encodeURIComponent(slug)}`).catch(() => null);
+  const r = await apiFetch(`/api/settings?vault=${encodeURIComponent(slug)}`).catch(() => null);
   const stored = (r?.ok ? await r.json() : {}) as Partial<Record<Key, unknown>>;
   // One-time copy of settings that older versions kept in the browser.
   const migrated: Key[] = [];

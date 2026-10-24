@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "build:static": "tsc -b && vite build --mode static",
+    "export:static": "node server/export-static.ts",
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b",

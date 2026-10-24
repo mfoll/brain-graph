@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import type { VaultGraph } from "../types";
+import { apiFetch, assetUrl } from "../staticSite";
 
 interface Props {
   data: VaultGraph;
@@ -37,7 +38,7 @@ export function NoteReader({ data, id, onNavigate, vault: otherVault }: Props) {
     let cancelled = false;
     setNote(null);
     setError(null);
-    fetch(`/api/note?vault=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`)
+    apiFetch(`/api/note?vault=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`)
       .then((r) => (r.ok ? (r.json() as Promise<NoteResponse>) : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((n) => !cancelled && setNote(n))
       .catch((e) => !cancelled && setError(String(e)));
@@ -71,8 +72,7 @@ export function NoteReader({ data, id, onNavigate, vault: otherVault }: Props) {
       return resolved ? `<a href="#note:${encodeURIComponent(resolved)}" class="wikilink" data-note="${resolved}">${label}</a>` : `<span class="wikilink${otherVault ? "" : " missing"}">${label}</span>`;
     });
     const rendered = marked.parse(withLinks, { async: false, gfm: true }) as string;
-    const vault = encodeURIComponent(slug);
-    const rebased = rendered.replace(/src="(?!https?:|data:|\/)([^"]+)"/g, (_m, src: string) => `src="/vault-file/${src.split("/").map(encodeURIComponent).join("/")}?vault=${vault}"`);
+    const rebased = rendered.replace(/src="(?!https?:|data:|\/)([^"]+)"/g, (_m, src: string) => `src="${assetUrl(slug, src)}"`);
     return DOMPurify.sanitize(rebased, { ADD_ATTR: ["data-note", "target"] });
   }, [note, resolve, slug, otherVault]);
 

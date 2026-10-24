@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { NoteNode, VaultGraph } from "../types";
 import { NoteReader } from "./NoteReader";
+import { STATIC } from "../staticSite";
 import { groupColor, type BrainGraph } from "../graph/build";
 import { edgeStyle } from "../graph/colors";
 import { SHAPE_GLYPH, acceptsDoubleParent, homeChain, outsideReason, shapeFor, subtreeMembers, type HomeIndex, type HomeLevel } from "../graph/home";
@@ -170,7 +171,7 @@ export function NotePanel({ data, graph, node, typeColors, homeIndex, level, onS
       )}
       {!chain.length && !isHub && <div className="crumbs muted small">{outsideReason(node, homeIndex) ? `Not placed in a group (${outsideReason(node, homeIndex)}).` : "No group: none of its parent links leads to a group."}</div>}
       <div className="actions">
-        <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>
+        {!STATIC && <a className="button primary" href={deepLink(data, node.id)}>Open in Tolaria</a>}
         <button className="button" onClick={() => navigator.clipboard?.writeText(`[[${node.folder ? node.id : node.stem}]]`)}>Copy wikilink</button>
       </div>
       <div className="panel-tabs">

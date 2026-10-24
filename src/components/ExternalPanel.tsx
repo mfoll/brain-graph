@@ -1,6 +1,7 @@
 import type { VaultGraph } from "../types";
 import type { BrainGraph } from "../graph/build";
 import { NoteReader } from "./NoteReader";
+import { STATIC } from "../staticSite";
 
 export interface BridgeAttrs {
   vault: string;
@@ -54,9 +55,11 @@ export function ExternalPanel({ data, graph, id, title, bridge, onSelect, onClos
           </span>
         ))}
       </div>
-      <div className="actions">
-        <a className="button primary" href={href}>Open in Tolaria</a>
-      </div>
+      {!STATIC && (
+        <div className="actions">
+          <a className="button primary" href={href}>Open in Tolaria</a>
+        </div>
+      )}
       <NoteReader data={data} vault={bridge.vault} id={bridge.path.replace(/\.md$/, "")} onNavigate={onSelect} />
     </aside>
   );
