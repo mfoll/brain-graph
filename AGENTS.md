@@ -14,7 +14,9 @@ Instructions for a coding agent asked to install, run or use Brain Graph for a u
 
    The first run clones and builds the app (about a minute, needs GitHub access to the repository); later runs start in a second. The first folder given becomes the default vault; more folders can follow.
 4. Confirm it answers before reporting: `curl -s http://localhost:5178/api/vaults` returns the vault list as JSON. If the port is taken, rerun with another `--port` and report that port.
-5. Report the URL `http://localhost:5178/` and that the process runs until stopped. Do not open the browser for the user unless asked.
+5. Report the URL `http://localhost:5178/` and that the process runs until stopped or until the machine restarts. Do not open the browser for the user unless asked.
+
+To start it at every login on macOS, the README's [Start at login](README.md#start-at-login-macos) section installs a LaunchAgent. That is a lasting change to the user's login: ask first, stop any server already on the port before bootstrapping it, and confirm with the `curl` check above.
 
 `npm install -g github:mfoll/brain-graph` makes a permanent `brain-graph` command. It is a machine-wide install: ask for explicit approval first, and report where it was installed.
 

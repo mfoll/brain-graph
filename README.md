@@ -72,6 +72,45 @@ brain-graph ~/path/to/vault
 
 To use it as an app with its own window and Dock icon, open it in Safari and choose **File → Add to Dock**, or in Chrome click the install icon in the address bar. When the server is not running, the app shows the command to start it and reloads by itself once it answers.
 
+### Start at login (macOS)
+
+A server started from a terminal stops when the Mac restarts. To start Brain Graph at every login, and again if it crashes, install a LaunchAgent. Set your vault path on the first line, then paste the whole block:
+
+```bash
+VAULT="$HOME/path/to/vault"
+cat > ~/Library/LaunchAgents/local.brain-graph.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.brain-graph</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(command -v npx)</string><string>-y</string><string>github:mfoll/brain-graph</string>
+    <string>$VAULT</string><string>--no-open</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>$(dirname "$(command -v node)"):/usr/bin:/bin</string></dict>
+  <key>WorkingDirectory</key><string>$HOME</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>$HOME/Library/Logs/brain-graph.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/brain-graph.log</string>
+</dict>
+</plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.brain-graph.plist
+```
+
+Each start fetches the latest version from GitHub, so restarting the service also updates Brain Graph. A start that fails, for example without network at login, is tried again every 30 seconds. The log is in `~/Library/Logs/brain-graph.log`.
+
+```bash
+launchctl kickstart -k gui/$(id -u)/local.brain-graph   # restart, on the latest version
+launchctl bootout gui/$(id -u)/local.brain-graph        # stop until the next login
+rm ~/Library/LaunchAgents/local.brain-graph.plist       # after bootout: remove it for good
+```
+
 Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and for each vault its saved layout and settings. Copy that folder to keep the same maps and settings on another machine. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
 
 ## Agent activity
