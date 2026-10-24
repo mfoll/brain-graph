@@ -196,6 +196,10 @@ pnpm graph:homes ~/my-vault               # the group hierarchy and its problems
 
 Issues and pull requests are welcome. Keep vault conventions configurable, and run `pnpm typecheck` and `pnpm test` first; GitHub Actions runs both, plus the build, on every push.
 
+### Static demo build
+
+`pnpm build:static` builds the page into `dist-static/` for static hosting such as GitHub Pages: it uses relative URLs, opens no server connection, registers no service worker, keeps layout and settings changes in the visitor's browser, and hides **Open in Tolaria** and **Manage vaults…**. A **Replay agent** button shows the activity pulses without an agent. `pnpm export:static -- --config vaults.json --state state --out dist-static` then writes the vaults listed in `vaults.json` (`[{ "label": "…", "path": "…" }]`, paths relative to the file) into `dist-static/data/`, through the server's own handlers, with each vault's layout and settings taken from `state/layouts/<slug>.json` and `state/settings/<slug>.json`. Absolute paths and files in dot-folders are left out.
+
 ### Code layout
 
 - `server/vault.ts` reads the vault: frontmatter, titles, first paragraphs and wikilinks.

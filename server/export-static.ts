@@ -22,7 +22,8 @@ import { createVaultApi } from "./api.ts";
 import { splitFrontmatter } from "./vault.ts";
 import type { VaultGraph, VaultInfo } from "../shared/types.ts";
 
-const { values: args } = parseArgs({ options: { config: { type: "string" }, state: { type: "string" }, out: { type: "string" } } });
+// pnpm passes a separating "--" through; it is not an argument.
+const { values: args } = parseArgs({ args: process.argv.slice(2).filter((a) => a !== "--"), options: { config: { type: "string" }, state: { type: "string" }, out: { type: "string" } } });
 if (!args.config || !args.out) {
   console.error("Usage: node server/export-static.ts --config vaults.json [--state dir] --out dir");
   process.exit(1);
