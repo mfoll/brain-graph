@@ -8,7 +8,7 @@ An interactive map of a Markdown vault whose notes have a `type` and link to eac
 
 ## Screenshots
 
-All screenshots come from the same fictional demo vault of a cancer genomics lab.
+All screenshots come from the same fictional demo vault of a cancer genomics lab, [Varga Lab Brain](https://github.com/mfoll/second-brain-demo-cancer-lab). Eight more [example vaults](https://github.com/mfoll/second-brain-template#example-vaults) are ready to try: clone one and pass its folder to Brain Graph.
 
 ![The whole demo vault zoomed out: about 790 notes in coloured project regions, each with its name](docs/screenshot-overview.webp)
 
@@ -212,6 +212,7 @@ Issues and pull requests are welcome. Keep vault conventions configurable, and r
 | [Tolaria](https://tolaria.md/) ([source](https://github.com/refactoringhq/tolaria)) | The desktop app Brain Graph is built for. It reads the same files and opens notes from Brain Graph's links. |
 | [Portent](https://github.com/refactoringhq/portent) | The open specification behind the note types and relationships. |
 | [Second Brain template](https://github.com/mfoll/second-brain-template) | A vault template with agent instructions and lint checks. Brain Graph follows its hierarchy rules. |
+| [Example vaults](https://github.com/mfoll/second-brain-template#example-vaults) | Nine fictional vaults built from the template, from a cancer lab to a household, for trying Brain Graph on realistic data. |
 | [Obsidian graph view](https://obsidian.md/help/plugins/graph) | Works on any Markdown folder but uses only links in the text, not frontmatter relationships. |
 | [Quartz](https://quartz.jzhao.xyz/), [Foam](https://foambubble.github.io/) | Link graphs that need their own site build or editor. |
 
