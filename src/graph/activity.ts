@@ -6,7 +6,9 @@ import type { BrainGraph } from "./build";
 type Kind = "read" | "write";
 const RIPPLE_MS = 1600;
 const GLOW_MS = 30_000;
-const COLOURS: Record<Kind, string> = { read: "#3b82f6", write: "#e69f00" };
+// Writes use pure red: the farthest colour from every group palette that still shows on both themes (the
+// earlier orange was the Okabe–Ito palette's own orange, so writes vanished on orange groups).
+const COLOURS: Record<Kind, string> = { read: "#3b82f6", write: "#ff0000" };
 
 // Kept outside any one layer: a file change reloads the graph and recreates the layer, and the pulse that
 // change caused must carry on.

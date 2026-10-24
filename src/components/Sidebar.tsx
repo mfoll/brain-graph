@@ -663,7 +663,7 @@ export function Sidebar(p: Props) {
               <input type="range" min={0} max={4} value={filters.focusDepth} onChange={(e) => onChange({ ...filters, focusDepth: Number(e.target.value) })} />
             </label>
             <div className="subhead">Also show</div>
-            <label className="row" title="Blue for notes read by Claude Code or Codex, orange for notes written by any app. Needs the agent hooks: brain-graph install-hooks.">
+            <label className="row" title="Blue for notes read by Claude Code or Codex, red for notes written by any app. Needs the agent hooks: brain-graph install-hooks.">
               <input type="checkbox" checked={filters.activity} onChange={(e) => onChange({ ...filters, activity: e.target.checked })} />
               Pulse notes as agents read and write them
             </label>

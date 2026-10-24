@@ -10,6 +10,7 @@ import { getSetting, setSetting } from "./settingsStore";
 import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
 import { Menu } from "./components/Menu";
+import { replayStory } from "./graph/replay";
 import { STATIC, apiFetch } from "./staticSite";
 
 function useTheme() {
@@ -670,17 +671,26 @@ export default function App() {
     setActiveView(null);
   };
 
-  // Static demo only, where no agent reports to the page: replay what a session looks like. The notes
-  // linked to the open note (or to the most linked Project) pulse as reads, then the note itself as a write.
+  // Static demo only, where no agent reports to the page: replay what a session looks like (graph/replay.ts),
+  // around the open note first when there is one. Clicking again restarts it; another vault cancels it.
+  const replayTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const stopReplay = () => {
+    replayTimers.current.forEach(clearTimeout);
+    replayTimers.current = [];
+  };
+  useEffect(() => stopReplay, [data?.vault.slug]);
   const replayActivity = () => {
     if (!data || !filteredGraph) return;
-    const degree = (n: { inDegree: number; outDegree: number }) => n.inDegree + n.outDegree;
-    const projects = data.nodes.filter((n) => n.type === "Project");
-    const start = selected && byId.has(selected) ? selected : [...(projects.length ? projects : data.nodes)].sort((a, b) => degree(b) - degree(a))[0]?.id;
-    if (!start || !filteredGraph.hasNode(start)) return;
-    const reads = filteredGraph.neighbors(start).filter((id) => byId.has(id)).sort((a, b) => degree(byId.get(b)!) - degree(byId.get(a)!)).slice(0, 5);
-    [...reads.map((id) => ({ id, kind: "read" })), { id: start, kind: "write" }].forEach((step, i) =>
-      setTimeout(() => window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail: { vault: data.vault.slug, ...step, source: "demo", time: Date.now() } })), i * 900),
+    stopReplay();
+    const g = filteredGraph;
+    const degree = (id: string) => byId.get(id)!.inDegree + byId.get(id)!.outDegree;
+    const shown = (id: string) => byId.has(id) && g.hasNode(id) && !hidden.has(id);
+    const byDegree = (ids: string[]) => ids.filter(shown).sort((a, b) => degree(b) - degree(a));
+    const projects = byDegree(data.nodes.filter((n) => n.type === "Project").map((n) => n.id));
+    const hubs = [...new Set([...(selected && shown(selected) ? [selected] : []), ...(projects.length >= 4 ? projects : byDegree(data.nodes.map((n) => n.id)))])];
+    const slug = data.vault.slug;
+    replayTimers.current = replayStory({ slug, hubs, linked: (id) => byDegree([...new Set(g.neighbors(id))]) }).map((step) =>
+      setTimeout(() => window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail: { vault: slug, id: step.id, kind: step.kind, source: step.source, time: Date.now() } })), step.at),
     );
   };
 
@@ -858,7 +868,7 @@ export default function App() {
           </button>
           <button className="button" onClick={() => setFitRequest((n) => n + 1)}>Fit</button>
           {STATIC && (
-            <button className="button" onClick={replayActivity} title="Show how notes pulse as an agent reads them (blue) and writes one (orange), around the open note or the most linked Project">
+            <button className="button" onClick={replayActivity} title="Show how notes pulse as two agents read them (blue) and write them (red), starting from the open note if there is one">
               Replay agent
             </button>
           )}

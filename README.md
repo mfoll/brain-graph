@@ -2,9 +2,9 @@
 
 An interactive map of a Markdown vault whose notes have a `type` and link to each other through frontmatter, as in [Tolaria](https://tolaria.md/) and the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node and each relationship a link. Notes are coloured and grouped by the Project, Responsibility or Topic they belong to. It runs locally, opens notes in Tolaria, and never writes to the vault.
 
-![Brain Graph on a fictional demo vault of about 790 notes, coloured by nearest group, while two agents work at once: the notes they read pulse blue across a dozen project clusters, and the notes they update pulse orange](docs/brain-graph-demo.webp)
+![Brain Graph on a fictional demo vault of about 790 notes, coloured by nearest group, while two agents work at once: the notes they read pulse blue across a dozen project clusters, and the notes they update pulse red](docs/brain-graph-demo.webp)
 
-*Two agents working at once, Claude running a weekly review of six projects and Codex checking whether storage time confounds the Northvale methylation signal: the notes they read glow blue, the notes they write glow orange.*
+*Two agents working at once, Claude running a weekly review of six projects and Codex checking whether storage time confounds the Northvale methylation signal: the notes they read glow blue, the notes they write glow red.*
 
 **[Try the live demo](https://mfoll.github.io/brain-graph-demo/)**: nine fictional vaults in your browser, nothing to install. Pick one from the menu at the top left.
 
@@ -52,7 +52,7 @@ Brain Graph shows the whole vault at once: how large each project is, where area
 - **Filters.** Hide archived notes, orphans or weakly linked notes. Fold leaf types such as Sources into a count on their parent. Show only the neighbourhood of the selection.
 - **Stable layout.** The map is saved per vault and restored on the next start. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
 - **Views and sharing.** Save a combination of filters, focus and colouring as a named view. The URL holds the vault, note and focus, so another note or a report can link to a view. **Export PNG** saves the current picture.
-- **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (orange), then fade over half a minute, so a session leaves a visible trail. Searches do not light up the vault. See [Agent activity](#agent-activity).
+- **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (red), then fade over half a minute, so a session leaves a visible trail. Searches do not light up the vault. See [Agent activity](#agent-activity).
 - **Live.** The map updates in place when a note changes on disk. A new note glides out of the note it is most linked to and settles among its siblings, a note given another parent glides to its new group, and a deleted note disappears. Nothing else moves.
 
 ## Install
@@ -117,11 +117,11 @@ Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and
 
 ## Agent activity
 
-Notes pulse on the map as agents use them: blue when Claude Code or Codex reads a note, orange when any app writes one. The glow fades over half a minute, so a session leaves a trail. Turn it off in Settings → Filters → *Pulse notes as agents read and write them*.
+Notes pulse on the map as agents use them: blue when Claude Code or Codex reads a note, red when any app writes one. The glow fades over half a minute, so a session leaves a trail. Turn it off in Settings → Filters → *Pulse notes as agents read and write them*.
 
 **How it works.**
 
-- **Writes** need nothing: the server already watches the vault, so a note saved by an agent, Tolaria or you pulses orange.
+- **Writes** need nothing: the server already watches the vault, so a note saved by an agent, Tolaria or you pulses red.
 - **Reads** come from the agents. After each tool call, Claude Code and Codex run a small hook that works out which notes the call read or wrote. It sends their paths to the Brain Graph server on your machine, which forwards them to the open page.
 - Only note paths are sent, only to `127.0.0.1`, and nothing is stored. The hook prints nothing, never blocks the agent, and gives up after half a second when Brain Graph is not running.
 
@@ -202,7 +202,7 @@ Issues and pull requests are welcome. Keep vault conventions configurable, and r
 
 ### Static demo build
 
-`pnpm build:static` builds the page into `dist-static/` for static hosting such as GitHub Pages: it uses relative URLs, opens no server connection, registers no service worker, keeps layout and settings changes in the visitor's browser, and hides **Open in Tolaria** and **Manage vaults…**. A **Replay agent** button shows the activity pulses without an agent. `pnpm export:static -- --config vaults.json --state state --out dist-static` then writes the vaults listed in `vaults.json` (`[{ "label": "…", "path": "…" }]`, paths relative to the file) into `dist-static/data/`, through the server's own handlers, with each vault's layout and settings taken from `state/layouts/<slug>.json` and `state/settings/<slug>.json`. Absolute paths and files in dot-folders are left out.
+`pnpm build:static` builds the page into `dist-static/` for static hosting such as GitHub Pages: it uses relative URLs, opens no server connection, registers no service worker, keeps layout and settings changes in the visitor's browser, and hides **Open in Tolaria** and **Manage vaults…**. A **Replay agent** button shows the activity pulses without an agent: a made-up session of two agents, built from the vault's own links, reading the most linked Projects and their notes and then writing them. `pnpm export:static -- --config vaults.json --state state --out dist-static` then writes the vaults listed in `vaults.json` (`[{ "label": "…", "path": "…" }]`, paths relative to the file) into `dist-static/data/`, through the server's own handlers, with each vault's layout and settings taken from `state/layouts/<slug>.json` and `state/settings/<slug>.json`. Absolute paths and files in dot-folders are left out.
 
 ### Code layout
 
