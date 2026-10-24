@@ -8,7 +8,7 @@ An interactive map of a Markdown vault whose notes have a `type` and link to eac
 
 ## Screenshots
 
-All screenshots come from the same fictional demo vault of a cancer genomics lab, [Varga Lab Brain](https://github.com/mfoll/second-brain-demo-cancer-lab). Eight more [example vaults](https://github.com/mfoll/second-brain-template#example-vaults) are ready to try: clone one and pass its folder to Brain Graph.
+All screenshots come from the same fictional demo vault of a cancer genomics lab, [Varga Lab Brain](https://github.com/mfoll/second-brain-demo-cancer-lab/blob/main/README.md). Eight more [example vaults](https://github.com/mfoll/second-brain-template#example-vaults) are ready to try: clone one and pass its folder to Brain Graph.
 
 ![The whole demo vault zoomed out: about 790 notes in coloured project regions, each with its name](docs/screenshot-overview.webp)
 
