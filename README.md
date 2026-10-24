@@ -2,9 +2,11 @@
 
 An interactive map of a Markdown vault whose notes have a `type` and link to each other through frontmatter, as in [Tolaria](https://tolaria.md/) and the [Second Brain template](https://github.com/mfoll/second-brain-template). Each note is a node and each relationship a link. Notes are coloured and grouped by the Project, Responsibility or Topic they belong to. It runs locally, opens notes in Tolaria, and never writes to the vault.
 
-![Brain Graph on a fictional 794-note demo vault, coloured by nearest group, while an agent answers a question: four notes it reads pulse blue across three project clusters, then the note it updates pulses orange](docs/brain-graph-demo.webp)
+![Brain Graph on a fictional demo vault of about 790 notes, coloured by nearest group, while two agents work at once: the notes they read pulse blue across a dozen project clusters, and the notes they update pulse orange](docs/brain-graph-demo.webp)
 
-*An agent answering "What is blocking the MRD manuscript revision?" in the demo vault: the notes it reads glow blue, the note it writes glows orange.*
+*Two agents working at once, Claude running a weekly review of six projects and Codex checking whether storage time confounds the Northvale methylation signal: the notes they read glow blue, the notes they write glow orange.*
+
+**[Try the live demo](https://mfoll.github.io/brain-graph-demo/)**: nine fictional vaults in your browser, nothing to install. Pick one from the menu at the top left.
 
 ## Screenshots
 
