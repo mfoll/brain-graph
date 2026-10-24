@@ -9,6 +9,7 @@ import { useSavedLayout, useVault, useVaults } from "./useVault";
 import { getSetting, setSetting } from "./settingsStore";
 import type { VaultGraph } from "./types";
 import { VaultManager } from "./components/VaultManager";
+import { Menu } from "./components/Menu";
 import { STATIC, apiFetch } from "./staticSite";
 
 function useTheme() {
@@ -796,25 +797,16 @@ export default function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <label className="vault-picker" title={data.vault.path}>
-            <span className="vault-name">{data.vault.label}</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <select
-              className="vault-select"
-              aria-label="Vault"
-              value={data.vault.slug}
-              onChange={(e) => (e.target.value === "__manage__" ? setManageVaults(true) : setVaultSlug(e.target.value))}
-            >
-              {(vaults ?? []).map((v) => (
-                <option key={v.slug} value={v.slug}>
-                  {v.label}
-                </option>
-              ))}
-              {!STATIC && <option value="__manage__">Manage vaults…</option>}
-            </select>
-          </label>
+          <Menu
+            className="vault-picker"
+            label={`Vault: ${data.vault.label}`}
+            title={STATIC ? "Choose a vault" : data.vault.path}
+            button={<span className="vault-name">{data.vault.label}</span>}
+            items={[
+              ...(vaults ?? []).map((v) => ({ key: v.slug, label: v.label, title: STATIC ? undefined : v.path, checked: v.slug === data.vault.slug, onSelect: () => setVaultSlug(v.slug) })),
+              ...(STATIC ? [] : [{ key: "__manage__", label: "Manage vaults…", separated: true, onSelect: () => setManageVaults(true) }]),
+            ]}
+          />
           <span className="muted">
             {visibleCount}/{data.nodes.length} notes · {filteredGraph.size} links
             {saved.layout && !layoutRun && ` · layout saved ${new Date(saved.layout.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
@@ -887,27 +879,18 @@ export default function App() {
         {layoutRun && <div className="progress" style={{ width: `${layoutProgress * 100}%` }} />}
       </header>
       <div className={`stateline${stateParts.length === 0 && !kindsChanged ? " empty" : ""}`}>
-        <select
+        <Menu
           className="view-select"
-          value={activeView ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "__save__") saveView();
-            else if (v === "__delete__") deleteView();
-            else applyView(views.find((x) => x.name === v) ?? null);
-          }}
+          label={`Saved view: ${activeView ?? "Default view"}`}
           title="Saved views"
-        >
-          <option value="">Default view</option>
-          {views.map((v) => (
-            <option key={v.name} value={v.name}>
-              {v.name}
-            </option>
-          ))}
-          <option disabled>──</option>
-          <option value="__save__">Save current view…</option>
-          {activeView && <option value="__delete__">Delete “{activeView}”</option>}
-        </select>
+          button={<span className="view-name">{activeView ?? "Default view"}</span>}
+          items={[
+            { key: "", label: "Default view", checked: !activeView, onSelect: () => applyView(null) },
+            ...views.map((v) => ({ key: `view:${v.name}`, label: v.name, checked: v.name === activeView, onSelect: () => applyView(v) })),
+            { key: "__save__", label: "Save current view…", separated: true, onSelect: saveView },
+            ...(activeView ? [{ key: "__delete__", label: `Delete “${activeView}”`, onSelect: deleteView }] : []),
+          ]}
+        />
           <span className="chips-inline">
             {stateParts.map((part) => (
               <span key={part.label} className="state-chip" title={part.title}>
