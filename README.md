@@ -179,6 +179,8 @@ The defaults follow Tolaria and the Second Brain template.
 
 ## Development
 
+Development needs Node.js 22.18 or newer, because the tests and the `graph:*` and `export:static` scripts run TypeScript files directly with `node`. The installed command above only needs 20.19.
+
 ```bash
 git clone https://github.com/mfoll/brain-graph && cd brain-graph
 pnpm install
@@ -224,7 +226,7 @@ Issues and pull requests are welcome. Keep vault conventions configurable, and r
 
 ## Status
 
-In daily use since October 2026 on a 1,300-note vault. One vault is shown at a time; notes from other vaults appear only where this vault links to them. The Tolaria slug is derived from the vault name.
+In daily use on a vault of about 1,300 notes. One vault is shown at a time; notes from other vaults appear only where this vault links to them. The Tolaria slug is derived from the vault name.
 
 ## Licence
 
