@@ -36,6 +36,8 @@ export interface GraphViewProps {
   linkWidth: number;
   /** Pulse notes reported as read or written by other apps. */
   showActivity: boolean;
+  /** The note a pulse is drawn on: the note itself, its parent when its type is folded into it, or null when hidden. */
+  pulseTarget: (id: string) => string | null;
   /** Rendered node size from which labels are drawn (zoom-dependent label density). */
   labelThreshold: number;
   /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
@@ -313,10 +315,12 @@ export function GraphView(props: GraphViewProps) {
     const hullBack = sigma.createCanvas("hulls", { beforeLayer: "stage", style: { pointerEvents: "none" } });
     const hullFront = sigma.createCanvas("hull-labels", { afterLayer: "stage", style: { pointerEvents: "none" } });
     // Notes read or written by other apps pulse on their own layer.
-    const activity = createActivityLayer(sigma as unknown as Sigma, graph, sigma.createCanvas("activity", { afterLayer: "stage", style: { pointerEvents: "none" } }));
+    const activity = createActivityLayer(sigma as unknown as Sigma, graph, sigma.createCanvas("activity", { afterLayer: "stage", style: { pointerEvents: "none" } }), (id) => !propsRef.current.hidden.has(id));
     const onActivity = (e: Event) => {
       const a = (e as CustomEvent<{ vault: string; id: string; kind: "read" | "write" }>).detail;
-      if (propsRef.current.showActivity && a.vault === graph.getAttribute("vault")) activity.pulse(a.id, a.kind);
+      if (!propsRef.current.showActivity || a.vault !== graph.getAttribute("vault")) return;
+      const target = propsRef.current.pulseTarget(a.id);
+      if (target) activity.pulse(target, a.kind);
     };
     window.addEventListener("brain-graph-activity", onActivity);
     const redrawHulls = () => {

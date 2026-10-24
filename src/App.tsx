@@ -671,6 +671,21 @@ export default function App() {
     setActiveView(null);
   };
 
+  // Where an agent's read or write is drawn: on the note, or on its parent when its type is folded into
+  // the parent's count; nowhere when a filter hides it (it would glow on an empty spot).
+  const pulseTarget = (id: string): string | null => {
+    if (!filteredGraph || !filteredGraph.hasNode(id)) return null;
+    if (!hidden.has(id)) return id;
+    const type = byId.get(id)?.type ?? "(untyped)";
+    if (!filters.collapseTypes.includes(type)) return null;
+    // The same belongs_to link that adds it to the parent's "+n" count.
+    let parent: string | null = null;
+    graph?.forEachOutEdge(id, (_e, a, _s, t) => {
+      if (!parent && a.kind === "belongs_to" && !hidden.has(t)) parent = t;
+    });
+    return parent;
+  };
+
   // Static demo only, where no agent reports to the page: replay what a session looks like (graph/replay.ts),
   // around the open note first when there is one. Clicking again restarts it; another vault cancels it.
   const replayTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -969,6 +984,7 @@ export default function App() {
           linkOpacity={filters.linkOpacity}
           linkWidth={filters.linkWidth}
           showActivity={filters.activity}
+          pulseTarget={pulseTarget}
           labelThreshold={filters.labelThreshold}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}

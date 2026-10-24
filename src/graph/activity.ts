@@ -14,7 +14,9 @@ const COLOURS: Record<Kind, string> = { read: "#3b82f6", write: "#ff0000" };
 // change caused must carry on.
 const pulses = new Map<string, { t0: number; kind: Kind }>();
 
-export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasElement) {
+/** `shown` says whether a note is drawn right now: filters hide notes but keep their positions, and a pulse
+ * there would glow on an empty spot. It is asked on every frame, so a note hidden later stops glowing. */
+export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTMLCanvasElement, shown: (id: string) => boolean) {
   let frame: number | null = null;
 
   const draw = () => {
@@ -39,7 +41,7 @@ export function createActivityLayer(sigma: Sigma, graph: BrainGraph, canvas: HTM
         pulses.delete(id);
         continue;
       }
-      if (!graph.hasNode(id)) continue;
+      if (!graph.hasNode(id) || !shown(id)) continue;
       const a = graph.getNodeAttributes(id);
       const c = sigma.graphToViewport({ x: a.x, y: a.y });
       const r = Math.max(3, a.size * sizeRatio);
