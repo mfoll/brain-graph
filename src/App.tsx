@@ -686,6 +686,10 @@ export default function App() {
     return parent;
   };
 
+  // Trails follow links of every kind, including those hidden on the map: most links an agent follows
+  // are links in the note text, which are hidden by default.
+  const linked = (a: string, b: string) => !!graph && graph.hasNode(a) && graph.hasNode(b) && (graph.hasEdge(a, b) || graph.hasEdge(b, a));
+
   // Static demo only, where no agent reports to the page: replay what a session looks like (graph/replay.ts),
   // around the open note first when there is one. Clicking again restarts it; another vault cancels it.
   const replayTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -705,7 +709,7 @@ export default function App() {
     const hubs = [...new Set([...(selected && shown(selected) ? [selected] : []), ...(projects.length >= 4 ? projects : byDegree(data.nodes.map((n) => n.id)))])];
     const slug = data.vault.slug;
     replayTimers.current = replayStory({ slug, hubs, linked: (id) => byDegree([...new Set(g.neighbors(id))]) }).map((step) =>
-      setTimeout(() => window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail: { vault: slug, id: step.id, kind: step.kind, source: step.source, time: Date.now() } })), step.at),
+      setTimeout(() => window.dispatchEvent(new CustomEvent("brain-graph-activity", { detail: { vault: slug, id: step.id, kind: step.kind, source: step.source, session: "replay", time: Date.now() } })), step.at),
     );
   };
 
@@ -985,6 +989,7 @@ export default function App() {
           linkWidth={filters.linkWidth}
           showActivity={filters.activity}
           pulseTarget={pulseTarget}
+          linked={linked}
           labelThreshold={filters.labelThreshold}
           spotlight={spotlight}
           emphasisHub={filters.spotlight?.kind === "hub" ? filters.spotlight.id : null}

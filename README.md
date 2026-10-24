@@ -52,7 +52,7 @@ Brain Graph shows the whole vault at once: how large each project is, where area
 - **Filters.** Hide archived notes, orphans or weakly linked notes. Fold leaf types such as Sources into a count on their parent. Show only the neighbourhood of the selection.
 - **Stable layout.** The map is saved per vault and restored on the next start. **Update layout** tidies the current map; **Reset layout** starts again and keeps the previous map as a backup.
 - **Views and sharing.** Save a combination of filters, focus and colouring as a named view. The URL holds the vault, note and focus, so another note or a report can link to a view. **Export PNG** saves the current picture.
-- **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (red), then fade over half a minute, so a session leaves a visible trail. Searches do not light up the vault. See [Agent activity](#agent-activity).
+- **Agent activity.** Notes pulse as Claude Code or Codex read them (blue) and as any app writes them (red), then fade over half a minute, so a session leaves a visible trail. When an agent goes from one note to a linked one, a dot runs along the link. Searches do not light up the vault. See [Agent activity](#agent-activity).
 - **Live.** The map updates in place when a note changes on disk. A new note glides out of the note it is most linked to and settles among its siblings, a note given another parent glides to its new group, and a deleted note disappears. Nothing else moves.
 
 ## Install
@@ -117,13 +117,14 @@ Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and
 
 ## Agent activity
 
-Notes pulse on the map as agents use them: blue when Claude Code or Codex reads a note, red when any app writes one. The glow fades over half a minute, so a session leaves a trail. Turn it off in Settings → Filters → *Pulse notes as agents read and write them*.
+Notes pulse on the map as agents use them: blue when Claude Code or Codex reads a note, red when any app writes one. The glow fades over half a minute, so a session leaves a trail. When an agent reads a note linked to one it read shortly before, a dot runs along that link and the link glows for a few seconds, so you can follow its path through the vault. Turn it off in Settings → Filters → *Pulse notes as agents read and write them*.
 
 **How it works.**
 
 - **Writes** need nothing: the server already watches the vault, so a note saved by an agent, Tolaria or you pulses red.
 - **Reads** come from the agents. After each tool call, Claude Code and Codex run a small hook that works out which notes the call read or wrote. It sends their paths to the Brain Graph server on your machine, which forwards them to the open page.
-- Only note paths are sent, only to `127.0.0.1`, and nothing is stored. The hook prints nothing, never blocks the agent, and gives up after half a second when Brain Graph is not running.
+- **Links followed** are inferred, since agents do not say which link they used. When a session reads a note, the most recent note the same session read in the last two minutes that links to it, in either direction, is taken as where it came from. A Project read before five of its notes therefore sends five trails out of the Project. Trails follow every link kind, including links in the note text that the map hides by default. Two sessions running at once are kept apart by the session ID the agents give their hooks.
+- Only note paths and the session ID are sent, only to `127.0.0.1`, and nothing is stored. The hook prints nothing, never blocks the agent, and gives up after half a second when Brain Graph is not running.
 
 **Install.**
 
@@ -144,6 +145,7 @@ npx github:mfoll/brain-graph uninstall-hooks
 - Claude Code's Read, Edit and Write tools, and Codex patches, name their files, so those pulses are exact.
 - For shell commands the hook only sees the command text. It counts each note named in it as read, unless the program is a search tool (`rg`, `grep`, `find`, `git`) or the note follows `>`. A command that only mentions a note can therefore pulse it. A command that reads notes without naming them, such as `cat *.md` or a script, shows nothing.
 - Searches never light up the vault.
+- Reading several linked notes in one command, such as `cat` on a whole folder, can draw trails the agent never followed: each still marks a real link between two notes it read in a row.
 
 **Cost.** About 75 ms per file or shell tool call in Claude Code, mostly starting Node, and nothing noticeable in Codex, where the hook runs in the background.
 
@@ -202,7 +204,7 @@ Issues and pull requests are welcome. Keep vault conventions configurable, and r
 
 ### Static demo build
 
-`pnpm build:static` builds the page into `dist-static/` for static hosting such as GitHub Pages: it uses relative URLs, opens no server connection, registers no service worker, keeps layout and settings changes in the visitor's browser, and hides **Open in Tolaria** and **Manage vaults…**. A **Replay agent** button shows the activity pulses without an agent: a made-up session of two agents, built from the vault's own links, reading the most linked Projects and their notes and then writing them. `pnpm export:static -- --config vaults.json --state state --out dist-static` then writes the vaults listed in `vaults.json` (`[{ "label": "…", "path": "…" }]`, paths relative to the file) into `dist-static/data/`, through the server's own handlers, with each vault's layout and settings taken from `state/layouts/<slug>.json` and `state/settings/<slug>.json`. Absolute paths and files in dot-folders are left out.
+`pnpm build:static` builds the page into `dist-static/` for static hosting such as GitHub Pages: it uses relative URLs, opens no server connection, registers no service worker, keeps layout and settings changes in the visitor's browser, and hides **Open in Tolaria** and **Manage vaults…**. A **Replay agent** button shows the activity pulses and trails without an agent: a made-up session of two agents, built from the vault's own links, reading the most linked Projects and their notes and then writing them. `pnpm export:static -- --config vaults.json --state state --out dist-static` then writes the vaults listed in `vaults.json` (`[{ "label": "…", "path": "…" }]`, paths relative to the file) into `dist-static/data/`, through the server's own handlers, with each vault's layout and settings taken from `state/layouts/<slug>.json` and `state/settings/<slug>.json`. Absolute paths and files in dot-folders are left out.
 
 ### Code layout
 

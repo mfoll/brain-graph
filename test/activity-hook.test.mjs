@@ -1,7 +1,7 @@
 // What the agent hook reports for typical Claude Code and Codex tool calls. Run with: pnpm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extract } from "../hooks/activity-hook.mjs";
+import { extract, report } from "../hooks/activity-hook.mjs";
 
 const V = "/vault";
 const run = (tool_name, tool_input) => extract({ tool_name, tool_input, cwd: V }).map((x) => `${x.kind} ${x.path}`);
@@ -25,4 +25,10 @@ test("shell commands", () => {
 test("Codex patches", () => {
   const patch = "*** Begin Patch\n*** Update File: e.md\n@@\n-a\n+b\n*** Add File: notes/f.md\n+x\n*** Delete File: g.md\n*** End Patch";
   assert.deepEqual(run("apply_patch", { command: patch }), ["write /vault/e.md", "write /vault/notes/f.md"], "deleted notes are not pulsed");
+});
+
+test("session", () => {
+  const p = { tool_name: "Read", tool_input: { file_path: "/vault/a.md" }, cwd: V };
+  assert.equal(report({ ...p, session_id: "abc" }, "claude").session, "abc", "passed on, so trails follow one session");
+  assert.equal(report(p, "codex").session, undefined, "absent when the agent does not say");
 });

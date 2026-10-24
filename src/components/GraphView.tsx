@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Sigma from "sigma";
 import { createActivityLayer } from "../graph/activity";
+import { followRead } from "../graph/trails";
 import { sdfCircle, sdfDiamond, sdfRectangle, sdfSquare, sdfTriangle } from "sigma/rendering";
 import { drawOnCanvas } from "@sigma/export-image";
 import forceAtlas2 from "graphology-layout-forceatlas2";
@@ -38,6 +39,8 @@ export interface GraphViewProps {
   showActivity: boolean;
   /** The note a pulse is drawn on: the note itself, its parent when its type is folded into it, or null when hidden. */
   pulseTarget: (id: string) => string | null;
+  /** Whether two notes are linked by any link kind, including kinds hidden on the map (for trails). */
+  linked: (a: string, b: string) => boolean;
   /** Rendered node size from which labels are drawn (zoom-dependent label density). */
   labelThreshold: number;
   /** Notes to keep highlighted (everything else fades) while nothing is hovered or selected. */
@@ -317,10 +320,15 @@ export function GraphView(props: GraphViewProps) {
     // Notes read or written by other apps pulse on their own layer.
     const activity = createActivityLayer(sigma as unknown as Sigma, graph, sigma.createCanvas("activity", { afterLayer: "stage", style: { pointerEvents: "none" } }), (id) => !propsRef.current.hidden.has(id));
     const onActivity = (e: Event) => {
-      const a = (e as CustomEvent<{ vault: string; id: string; kind: "read" | "write" }>).detail;
+      const a = (e as CustomEvent<{ vault: string; id: string; kind: "read" | "write"; source?: string; session?: string }>).detail;
       if (!propsRef.current.showActivity || a.vault !== graph.getAttribute("vault")) return;
       const target = propsRef.current.pulseTarget(a.id);
       if (target) activity.pulse(target, a.kind);
+      // A read may follow a link from a note the same session read shortly before (graph/trails.ts).
+      if (a.kind !== "read") return;
+      const from = followRead(`${a.source ?? "agent"}:${a.session ?? ""}`, a.id, Date.now(), propsRef.current.linked);
+      const fromTarget = from ? propsRef.current.pulseTarget(from) : null;
+      if (target && fromTarget && fromTarget !== target) activity.trail(fromTarget, target);
     };
     window.addEventListener("brain-graph-activity", onActivity);
     const redrawHulls = () => {

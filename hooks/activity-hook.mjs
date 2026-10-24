@@ -82,14 +82,21 @@ export function extract(p) {
     .slice(0, 50);
 }
 
+/** The report sent to Brain Graph: the notes read or written, and the agent session they belong to, so the
+ * map can draw the links one session follows (two sessions at once must not be mixed up). */
+export function report(p, source) {
+  const session = p.session_id ?? p.sessionId;
+  return { source, session: typeof session === "string" ? session.slice(0, 64) : undefined, items: extract(p) };
+}
+
 async function main() {
   const [, , source = "agent", url = process.env.BRAIN_GRAPH_URL ?? "http://127.0.0.1:5178"] = process.argv;
   try {
     let raw = "";
     for await (const chunk of process.stdin) raw += chunk;
-    const items = extract(JSON.parse(raw));
-    if (items.length)
-      await fetch(`${url}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, items }), signal: AbortSignal.timeout(500) });
+    const body = report(JSON.parse(raw), source);
+    if (body.items.length)
+      await fetch(`${url}/api/activity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(500) });
   } catch {
     /* Brain Graph not running, or a payload this hook does not understand: say nothing. */
   }

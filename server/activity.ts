@@ -10,6 +10,8 @@ export interface Activity {
   kind: "read" | "write";
   /** Who touched the note: "claude", "codex", or "file" for a change seen by the watcher. */
   source: string;
+  /** The agent session, when the hook knows it: the page draws the links one session follows. */
+  session?: string;
   time: number;
 }
 

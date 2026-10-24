@@ -445,8 +445,9 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   routes.push(["/api/activity", async (req, res) => {
     if (req.method !== "POST") return json(res, { error: "POST only" }, 405);
     try {
-      const body = JSON.parse(await readBody(req)) as { source?: unknown; items?: unknown };
+      const body = JSON.parse(await readBody(req)) as { source?: unknown; session?: unknown; items?: unknown };
       const source = typeof body.source === "string" ? body.source.slice(0, 32) : "agent";
+      const session = typeof body.session === "string" ? body.session.slice(0, 64) : undefined;
       const items = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
       const list = await vaults();
       let sent = 0;
@@ -454,7 +455,7 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
         if (typeof it?.path !== "string" || (it.kind !== "read" && it.kind !== "write")) continue;
         const note = noteFor(path.resolve(it.path), list);
         if (!note) continue;
-        sendActivity({ ...note, kind: it.kind, source, time: Date.now() });
+        sendActivity({ ...note, kind: it.kind, source, session, time: Date.now() });
         sent++;
       }
       json(res, { ok: true, sent });
