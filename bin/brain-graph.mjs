@@ -6,7 +6,7 @@
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { openBrowser } from "./open-browser.mjs";
 import { existsSync } from "node:fs";
 import sirv from "sirv";
 import { createVaultApi } from "../dist/server/server/api.js";
@@ -84,8 +84,7 @@ server.listen(port, "127.0.0.1", async () => {
   console.log(vaults.length ? `Vaults: ${vaults.map((v) => `${v.label} (${v.path})`).join(", ")}` : "No vault yet: add a folder in the app (Manage vaults…) or pass one on the command line.");
   console.log(`Layouts: ${api.layoutDir}`);
   if (!noOpen) {
-    const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-    spawn(cmd, [url], { stdio: "ignore", detached: true, shell: process.platform === "win32" }).unref();
+    openBrowser(url);
   }
 });
 server.on("error", (err) => {

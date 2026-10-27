@@ -32,3 +32,24 @@ test("session", () => {
   assert.equal(report({ ...p, session_id: "abc" }, "claude").session, "abc", "passed on, so trails follow one session");
   assert.equal(report(p, "codex").session, undefined, "absent when the agent does not say");
 });
+
+test("installed command finds Node", async () => {
+  const { hookCommand } = await import("../bin/hooks.mjs");
+  const { mkdtemp, mkdir, writeFile, readFile, symlink, rm } = await import("node:fs/promises");
+  const { execFileSync } = await import("node:child_process");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const home = await mkdtemp(path.join(os.tmpdir(), "bg-hookcmd-"));
+  const out = path.join(home, "ran.txt");
+  const run = (node, PATH) => execFileSync("/bin/sh", ["-c", hookCommand("claude", 9, node)], { env: { HOME: home, PATH } });
+  run(process.execPath, "/usr/bin:/bin");
+  await mkdir(path.join(home, ".config", "brain-graph"), { recursive: true });
+  await writeFile(path.join(home, ".config", "brain-graph", "activity-hook.mjs"), `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(out)}, process.argv.slice(2).join(" "));`);
+  const odd = path.join(home, "it's a node");
+  await symlink(process.execPath, odd);
+  run(odd, "/usr/bin:/bin");
+  assert.equal(await readFile(out, "utf8"), "claude http://127.0.0.1:9", "the recorded Node runs even when node is not on the PATH");
+  await rm(out);
+  run(path.join(home, "gone", "node"), `${path.dirname(process.execPath)}:/usr/bin:/bin`);
+  assert.equal(await readFile(out, "utf8"), "claude http://127.0.0.1:9", "falls back to node on the PATH");
+});

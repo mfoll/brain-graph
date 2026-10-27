@@ -15,7 +15,7 @@
     "graph:homes": "node server/homes.ts",
     "prepare": "npm run build",
     "start": "node bin/brain-graph.mjs",
-    "test": "node --test test/vault.test.ts test/activity-hook.test.mjs test/trails.test.ts"
+    "test": "node --test test/vault.test.ts test/activity-hook.test.mjs test/trails.test.ts test/tolaria.test.ts test/cli.test.mjs"
   },
   "dependencies": {
     "@sigma/export-image": "^4.0.0",

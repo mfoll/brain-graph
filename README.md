@@ -113,6 +113,39 @@ launchctl bootout gui/$(id -u)/local.brain-graph        # stop until the next lo
 rm ~/Library/LaunchAgents/local.brain-graph.plist       # after bootout: remove it for good
 ```
 
+### Start at login (Linux)
+
+On Linux, a systemd user service does the same. Set your vault path on the first line, then paste the whole block:
+
+```bash
+VAULT="$HOME/path/to/vault"
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/brain-graph.service <<EOF
+[Unit]
+Description=Brain Graph
+
+[Service]
+ExecStart=$(command -v npx) -y github:mfoll/brain-graph "$VAULT" --no-open
+Environment=PATH=$(dirname "$(command -v node)"):/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now brain-graph
+```
+
+As on macOS, each start fetches the latest version, and a start that fails is tried again after 30 seconds. The log goes to the journal: `journalctl --user -u brain-graph`. A user service starts when you log in; to run it without a login session, for example on a home server, also run `loginctl enable-linger`.
+
+```bash
+systemctl --user restart brain-graph                     # restart, on the latest version
+systemctl --user stop brain-graph                        # stop until the next login
+systemctl --user disable --now brain-graph && rm ~/.config/systemd/user/brain-graph.service   # remove it for good
+```
+
 Brain Graph keeps its own files in `~/.config/brain-graph/`: the vault list, and for each vault its saved layout and settings. Copy that folder to keep the same maps and settings on another machine. A coding agent can install and run it from the instructions in [AGENTS.md](AGENTS.md).
 
 ## Agent activity
@@ -132,7 +165,7 @@ Notes pulse on the map as agents use them: blue when Claude Code or Codex reads 
 npx github:mfoll/brain-graph install-hooks
 ```
 
-This copies the hook to `~/.config/brain-graph/activity-hook.mjs`. It adds it to `~/.claude/settings.json` and `~/.codex/hooks.json`, for whichever of the two is installed, keeping a backup of each file and leaving other hooks alone. Name one agent (`install-hooks claude`) to install only that one, and add `--port` if Brain Graph does not run on 5178. New agent sessions pick the hook up. Codex runs a new hook only after you trust it: start `codex` and use `/hooks`. In the Claude desktop app the hook works as in the terminal; in the Codex desktop app it has not been checked yet.
+This copies the hook to `~/.config/brain-graph/activity-hook.mjs`. It adds it to `~/.claude/settings.json` and `~/.codex/hooks.json`, for whichever of the two is installed, keeping a backup of each file and leaving other hooks alone. The hook runs the Node that ran the installer, by its full path, so it also works from desktop apps and with version managers such as nvm; if that Node is removed later, it falls back to `node` on the PATH. Name one agent (`install-hooks claude`) to install only that one, and add `--port` if Brain Graph does not run on 5178. New agent sessions pick the hook up. Codex runs a new hook only after you trust it: start `codex` and use `/hooks`. In the Claude desktop app the hook works as in the terminal; in the Codex desktop app it has not been checked yet.
 
 Remove it with:
 

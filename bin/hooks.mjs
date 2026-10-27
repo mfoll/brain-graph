@@ -11,9 +11,16 @@ const TARGET = path.join(HOME, ".config", "brain-graph", "activity-hook.mjs");
 const SOURCE = fileURLToPath(new URL("../hooks/activity-hook.mjs", import.meta.url));
 const MARK = "activity-hook.mjs"; // how our entry is recognised in a settings file
 
-// Desktop apps may start hooks without the login shell's PATH, so the usual Node locations are added.
-const command = (agent, port) =>
-  `f="$HOME/.config/brain-graph/activity-hook.mjs"; [ -f "$f" ] && PATH="$PATH:/opt/homebrew/bin:/usr/local/bin" node "$f" ${agent} http://127.0.0.1:${port}; true`;
+const shellQuote = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * The hook command written into the agent's settings. It runs the Node that ran the installer, found
+ * by its full path, because desktop apps may start hooks without the login shell's PATH and a version
+ * manager (nvm, asdf, volta) keeps Node outside the usual folders. If that Node has since gone, it
+ * falls back to `node` on the PATH, with the usual Homebrew and /usr/local folders added.
+ */
+export const hookCommand = (agent, port, node = process.execPath) =>
+  `n=${shellQuote(node)}; [ -x "$n" ] || n=node; f="$HOME/.config/brain-graph/activity-hook.mjs"; [ -f "$f" ] && PATH="$PATH:/opt/homebrew/bin:/usr/local/bin" "$n" "$f" ${agent} http://127.0.0.1:${port}; true`;
 
 const AGENTS = {
   claude: { name: "Claude Code", dir: path.join(HOME, ".claude"), file: path.join(HOME, ".claude", "settings.json"), matcher: "Read|Edit|Write|MultiEdit|NotebookEdit|Bash", options: { timeout: 2 } },
@@ -74,7 +81,7 @@ export async function installHooks({ port = 5178, agents = [] } = {}) {
   console.log(`Hook script: ${TARGET}`);
   for (const [n, a] of await selected(agents)) {
     const data = withoutOurs(await readJson(a.file));
-    data.hooks = { ...data.hooks, PostToolUse: [...(data.hooks?.PostToolUse ?? []), { matcher: a.matcher, hooks: [{ type: "command", command: command(n, port), ...a.options }] }] };
+    data.hooks = { ...data.hooks, PostToolUse: [...(data.hooks?.PostToolUse ?? []), { matcher: a.matcher, hooks: [{ type: "command", command: hookCommand(n, port), ...a.options }] }] };
     await writeJson(a.file, data);
     console.log(`${a.name}: hook added to ${a.file} (previous version kept as ${path.basename(a.file)}.bak-brain-graph).`);
   }

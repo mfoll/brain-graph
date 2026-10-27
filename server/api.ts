@@ -7,6 +7,7 @@ import chokidar from "chokidar";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { findTolariaRegistry } from "./tolaria.ts";
 import { firstH1, buildGraph, slugify, type VaultGraph, firstParagraph, splitFrontmatter } from "./vault.ts";
 import { noteFor, type Activity } from "./activity.ts";
 import type { Bridge, VaultInfo } from "../shared/types.ts";
@@ -95,9 +96,9 @@ async function looksLikeVault(dir: string): Promise<boolean> {
 async function discoverVaults(opts: VaultApiOptions): Promise<VaultInfo[]> {
   const out = new Map<string, VaultInfo>();
   const manual = await readManual(opts);
-  const registryPath = opts.registryPath ?? path.join(os.homedir(), "Library", "Application Support", "com.tolaria.app", "vaults.json");
+  const registryPath = opts.registryPath ?? (await findTolariaRegistry());
   let registry: TolariaRegistry = {};
-  if (manual.useTolaria) {
+  if (manual.useTolaria && registryPath) {
     try {
       registry = JSON.parse(await fs.readFile(registryPath, "utf8")) as TolariaRegistry;
     } catch {
@@ -272,10 +273,9 @@ export function createVaultApi(opts: VaultApiOptions = {}) {
   routes.push(["/api/vaults", async (req, res) => {
     try {
       const manual = await readManual(opts);
-      const tolariaAvailable = await fs
-        .stat(opts.registryPath ?? path.join(os.homedir(), "Library", "Application Support", "com.tolaria.app", "vaults.json"))
-        .then(() => true)
-        .catch(() => false);
+      const tolariaAvailable = opts.registryPath
+        ? await fs.stat(opts.registryPath).then(() => true, () => false)
+        : (await findTolariaRegistry()) !== null;
       if (req.method === "POST") {
         const body = JSON.parse(await readBody(req)) as { path?: string; label?: string };
         const p = expand(body.path ?? "");
