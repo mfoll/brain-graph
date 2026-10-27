@@ -63,7 +63,7 @@ You need [Node.js](https://nodejs.org/) 20.19 or newer.
 npx github:mfoll/brain-graph ~/path/to/vault
 ```
 
-The first run builds the app, which takes about a minute. Then open <http://localhost:5178>. Without a folder argument, Brain Graph lists the vaults you have opened in Tolaria plus any folder you add in the app. Options: `--port 5178`, `--no-open`. To pin a [release](https://github.com/mfoll/brain-graph/releases), add its tag: `npx github:mfoll/brain-graph#v1.1.0 ~/path/to/vault`.
+The first run builds the app, which takes about a minute. Then open <http://localhost:5178>. Without a folder argument, Brain Graph lists the vaults you have opened in Tolaria plus any folder you add in the app. Options: `--port 5178`, `--no-open`. To pin a [release](https://github.com/mfoll/brain-graph/releases), add its tag: `npx github:mfoll/brain-graph#v1.2.0 ~/path/to/vault`.
 
 To install it as a command:
 
